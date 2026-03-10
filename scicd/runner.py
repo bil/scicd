@@ -90,13 +90,25 @@ def run_pipeline(
     """
     dotenv_path = os.path.join(os.getcwd(), ".env")
     load_dotenv(dotenv_path, override=True)
-    cfg = config.get_config()["gitlab"]
+
+    url = config.get("gitlab.url", required=True)
+    project_path = config.get("gitlab.project", required=True)
+
     pat = os.getenv("GITLAB_PAT")
     if not pat:
-        raise RuntimeError("Missing 'GITLAB_PAT' in environment or .env file.")
+        raise RuntimeError(
+            "Missing 'GITLAB_PAT' in environment or .env file.\n"
+            "This is required to trigger GitLab pipelines."
+        )
 
-    client = gitlab.Gitlab(cfg["url"], private_token=pat)
-    project = client.projects.get(cfg["project"])
+    client = gitlab.Gitlab(url, private_token=pat)
+    try:
+        project = client.projects.get(project_path)
+    except gitlab.exceptions.GitlabGetError as e:
+        raise RuntimeError(
+            f"Could not find GitLab project: '{project_path}' at {url}.\n"
+            f"Check 'gitlab.project' in scicd.yaml."
+        ) from e
 
     branch = branch or paths.get_branch()
     if not branch:

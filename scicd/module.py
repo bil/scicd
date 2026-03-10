@@ -92,20 +92,20 @@ class Module(ABC):
         if local_file.exists():
             return local_file
 
-        cfg = config.get_config()
-        deposition_url = cfg["path"]["deposition_url"]
+        deposition_url = config.get("path.deposition_url")
 
         if deposition_url:
             print(f"Resource missing: {filename}. Fetching from {deposition_url}...")
             if self._fetch_file(filename, deposition_url):
                 return local_file
             raise FileNotFoundError(
-                f"{filename} not found at endpoint for {self.__class__.__name__}"
+                f"Resource '{filename}' not found at {deposition_url} for {self.__class__.__name__}"
             )
 
         raise FileNotFoundError(
-            f"Resource {filename} missing for {self.__class__.__name__}. "
-            + f"Download file or run {self.__class__.__name__} to generate."
+            f"Resource '{filename}' missing locally for {self.__class__.__name__}.\n"
+            f"No 'path.deposition_url' configured for remote fetching.\n"
+            f"Run {self.__class__.__name__} to generate this file."
         )
 
     def _fetch_file(self, filename, base_url):

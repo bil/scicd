@@ -6,6 +6,10 @@ internal:
   module_dir: "module"
   ci_dir: "ci"
 
+# Global Logging Configuration
+logging:
+  verbose: true
+
 # Project Pathing and Durability
 path:
   output: null

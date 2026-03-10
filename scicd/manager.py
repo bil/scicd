@@ -55,28 +55,40 @@ def form_cfg(module_name, **kwargs):
     return cfg
 
 
-def exec_module(module_name, **kwargs):
+def exec_module(module_name, verbose=None, **kwargs):
     """
     Atomic execution unit for a single task instance.
     In CI, automatically extracts inputs from $SCICD_INPUT if kwargs are empty.
 
     Args:
         module_name (str): Name of the module to execute.
+        verbose (bool, optional): Whether to print status messages.
         **kwargs: Key-value pairs defining the task identity.
 
     Returns:
         any: Output from the module instance's run method.
     """
+    if verbose is None:
+        verbose = config.get("logging.verbose", default=True)
+
     if not kwargs and "SCICD_INPUT" in os.environ:
         kwargs = json.loads(os.environ["SCICD_INPUT"])
 
     instance = module.get_module_instance(module_name, **kwargs)
-    cfg = form_cfg(module_name, **kwargs)
+    module_cfg = form_cfg(module_name, **kwargs)
 
-    print(f"EXEC {module_name} | {kwargs}")
+    if verbose:
+        print(f"EXEC {module_name} | {kwargs}")
+
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        return instance.run(**cfg["param_merged"])
+        result = instance.run(**module_cfg["param_merged"])
+
+    if verbose:
+        print(f"DONE {module_name} | {kwargs}")
+        print(f"Outputs deposited at: {instance.full_path()}")
+
+    return result
 
 
 def get_inputs(module_name, module_cfg):

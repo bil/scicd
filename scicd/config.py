@@ -35,6 +35,52 @@ def get_module_config(module_cfg):
     return yamler.deep_update(get_config(), module_cfg)
 
 
-def show_config():
-    """Prints active configuration."""
-    pprint.pprint(get_config())
+def get(key, default=None, required=False):
+    """
+    Retrieves a configuration value using dot-notation.
+
+    Args:
+        key (str): Dot-notation key (e.g., 'path.output').
+        default (any, optional): Value to return if key is missing.
+        required (bool): If True, raises ValueError if key is missing.
+
+    Returns:
+        any: The configuration value.
+
+    Raises:
+        ValueError: If required is True and the key is missing.
+    """
+    cfg = get_config()
+    parts = key.split(".")
+    val = cfg
+    
+    try:
+        for part in parts:
+            val = val[part]
+        return val
+    except (KeyError, TypeError):
+        if required:
+            raise ValueError(
+                f"Missing required configuration: '{key}'\n"
+                f"Check your scicd.yaml or run 'scicd show_config' to verify."
+            )
+        return default
+
+
+def show_config(key=None):
+    """
+    Prints active configuration or a specific value if key is provided.
+
+    Args:
+        key (str, optional): Dot-notation key for specific config lookup (e.g., 'path.output').
+    """
+    if key:
+        val = get(key)
+        if val is None:
+            print(f"Error: Configuration key '{key}' not found.")
+        elif isinstance(val, (dict, list)):
+            pprint.pprint(val)
+        else:
+            print(val)
+    else:
+        pprint.pprint(get_config())

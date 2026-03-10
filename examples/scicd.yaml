@@ -7,7 +7,7 @@
 # -----------------------------------------------------------------------------
 path:
   # Local results directory (relative to project root or absolute)
-  output: "results"
+  output: "data"
 
   # Remote storage path (for rclone sync)
   # Example: "remote_name:bucket/project"
