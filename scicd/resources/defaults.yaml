@@ -1,0 +1,46 @@
+# LEVEL 5: Framework Defaults
+# Mandatory project-specific keys are set to null.
+
+# Framework Internal Paths
+internal:
+  module_dir: "module"
+  ci_dir: "ci"
+
+# Project Pathing and Durability
+path:
+  output: null
+  remote: null
+  use_branch: false
+  deposition_url: null
+
+# GitLab Infrastructure
+gitlab:
+  url: "https://gitlab.com"
+  project: null
+
+# Google Cloud Platform Infrastructure
+gcp:
+  project: null
+  pubsub_topic: null
+  pubsub_subscription: null
+
+# Joblib Local Engine Configuration
+joblib:
+  backend: "threading"
+  verbose: 10
+
+# Global CI/CD settings (GitLab)
+ci:
+  # Maps to GitLab root 'default:'
+  default:
+    tags:
+      - "$RUNNER"
+
+# Unified Concurrency Schema
+concurrency:
+  local:
+    method: "thread"
+    workers: 1
+  gitlab:
+    method: "matrix"
+    workers: null

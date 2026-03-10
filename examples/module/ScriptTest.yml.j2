@@ -1,0 +1,20 @@
+root_path: script_demo
+path: "{{ subject }}"
+
+script:
+  - 'echo "Running analysis for subject {{ subject }} with threshold $SCICD_PARAM_THRESHOLD"'
+  - "sleep 1"
+  - 'echo "Subject {{ subject }} done. Output path: $SCICD_OUT_DIR" > "$SCICD_OUT_DIR/result.txt"'
+
+input:
+  - subject: "SubA"
+  - subject: "SubB"
+  - subject: "SubC"
+
+param:
+  threshold: 0.85
+
+concurrency:
+  local:
+    method: thread
+    workers: 3

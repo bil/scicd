@@ -1,0 +1,27 @@
+src: src.example
+root_path: queue_demo
+category: dependent
+
+concurrency:
+  local:
+    method: thread
+    workers: 1
+  gitlab:
+    method: queue
+    workers: 10
+
+gcp:
+  pubsub_topic: kenjimar_tmp
+  pubsub_subscription: kenjimar_tmp-sub
+
+input_generator:
+  param:
+    num_tasks: 10
+
+# Local test inputs to satisfy __init__
+input:
+  - { task_id: "local-test", sleep_time: 1 }
+
+post:
+  param:
+    filename: final.txt

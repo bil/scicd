@@ -1,0 +1,166 @@
+
+Hello:__push__:
+  needs:
+  - job: Hello:run
+    optional: true
+  resource_group: remote_storage
+  rules: &id001
+  - if: $REQUESTED_MODULES =~ /.*:Hello:.*/ || $TRIGGER_ALL == 'true'
+  script:
+  - scicd push_data --path=hello_world --folders_first=True
+  stage: Hello
+  variables:
+    KUBERNETES_MEMORY_REQUEST: 4Gi
+    KUBERNETES_NODE_SELECTOR_FAMILY: cloud.google.com/machine-family=c2
+
+Hello:run:
+  needs:
+  - job: __pull__
+    optional: true
+  - job: PubsubExample:__push__
+    optional: true
+  rules: *id001
+  stage: Hello
+  trigger:
+    forward:
+      pipeline_variables: true
+    include:
+    - ci/child/Hello.yml
+    strategy: depend
+  variables:
+    KUBERNETES_MEMORY_REQUEST: 4Gi
+    KUBERNETES_NODE_SELECTOR_FAMILY: cloud.google.com/machine-family=c2
+
+Independent:__push__:
+  needs:
+  - job: Independent:run
+    optional: true
+  resource_group: remote_storage
+  rules: &id002
+  - if: $REQUESTED_MODULES =~ /.*:Independent:.*/ || $TRIGGER_ALL == 'true'
+  script:
+  - scicd push_data --path=independent --folders_first=True
+  stage: Independent
+
+Independent:run:
+  needs:
+  - job: __pull__
+    optional: true
+  rules: *id002
+  stage: Independent
+  trigger:
+    forward:
+      pipeline_variables: true
+    include:
+    - ci/child/Independent.yml
+    strategy: depend
+
+IndependentStill:__push__:
+  needs:
+  - job: IndependentStill:run
+    optional: true
+  resource_group: remote_storage
+  rules: &id003
+  - if: $REQUESTED_MODULES =~ /.*:IndependentStill:.*/ || $TRIGGER_ALL == 'true'
+  script:
+  - scicd push_data --path=independent --folders_first=True
+  stage: IndependentStill
+
+IndependentStill:run:
+  needs:
+  - job: __pull__
+    optional: true
+  - job: Hello:__push__
+    optional: true
+  rules: *id003
+  stage: IndependentStill
+  trigger:
+    forward:
+      pipeline_variables: true
+    include:
+    - ci/child/IndependentStill.yml
+    strategy: depend
+
+PubsubExample:__push__:
+  needs:
+  - job: PubsubExample:post
+    optional: true
+  resource_group: remote_storage
+  rules: &id004
+  - if: $REQUESTED_MODULES =~ /.*:PubsubExample:.*/ || $TRIGGER_ALL == 'true'
+  script:
+  - scicd push_data --path=queue_demo --folders_first=True
+  stage: PubsubExample
+
+PubsubExample:post:
+  needs:
+  - job: PubsubExample:run
+    optional: true
+  rules: *id004
+  script:
+  - scicd run_post PubsubExample
+  stage: PubsubExample
+
+PubsubExample:run:
+  needs:
+  - job: __pull__
+    optional: true
+  rules: *id004
+  stage: PubsubExample
+  trigger:
+    forward:
+      pipeline_variables: true
+    include:
+    - ci/child/PubsubExample.yml
+    strategy: depend
+
+ScriptTest:__push__:
+  needs:
+  - job: ScriptTest:run
+    optional: true
+  resource_group: remote_storage
+  rules: &id005
+  - if: $REQUESTED_MODULES =~ /.*:ScriptTest:.*/ || $TRIGGER_ALL == 'true'
+  script:
+  - scicd push_data --path=script_demo --folders_first=True
+  stage: ScriptTest
+
+ScriptTest:run:
+  needs:
+  - job: __pull__
+    optional: true
+  rules: *id005
+  stage: ScriptTest
+  trigger:
+    forward:
+      pipeline_variables: true
+    include:
+    - ci/child/ScriptTest.yml
+    strategy: depend
+
+__pull__:
+  resource_group: remote_storage
+  rules:
+  - if: $TRIGGER_PULL == 'true'
+  script:
+  - scicd pull_data
+  stage: __pull__
+
+default:
+  before_script:
+  - apt-get update && apt-get install -y rclone
+  - ./script/install_deps.sh
+  image: python:3.10
+  tags:
+  - $RUNNER
+
+variables:
+  KUBERNETES_CPU_REQUEST: 1
+  KUBERNETES_MEMORY_REQUEST: 4Gi
+  PYTHONUNBUFFERED: '1'
+
+workflow:
+  rules:
+  - if: $CI_PIPELINE_SOURCE == "push"
+    when: never
+  - when: always

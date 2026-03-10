@@ -1,0 +1,9 @@
+fire
+python-dotenv
+python-frontmatter
+jinja2
+pyyaml
+requests
+python-gitlab
+google-cloud-pubsub
+joblib

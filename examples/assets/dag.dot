@@ -1,0 +1,9 @@
+digraph G {
+  rankdir=LR;
+  node [shape=box, style=filled, fillcolor=lightblue, fontname="Arial"];
+
+  "Independent" [fillcolor=lightgrey];
+  "Hello" -> "IndependentStill";
+  "PubsubExample" [fillcolor=lightgrey];
+  "PubsubExample" -> "Hello";
+}

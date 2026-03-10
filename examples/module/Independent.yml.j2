@@ -1,0 +1,14 @@
+src: src.example
+root_path: independent
+category: independent
+
+concurrency:
+  local:
+    workers: 4
+  gitlab:
+    method: slice
+    workers: 2
+
+input:
+  - task_id: 1
+  - task_id: 2
