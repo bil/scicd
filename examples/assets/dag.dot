@@ -2,6 +2,7 @@ digraph G {
   rankdir=LR;
   node [shape=box, style=filled, fillcolor=lightblue, fontname="Arial"];
 
+  "ScriptTest" [fillcolor=lightgrey];
   "Independent" [fillcolor=lightgrey];
   "Hello" -> "IndependentStill";
   "PubsubExample" [fillcolor=lightgrey];
