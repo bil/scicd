@@ -201,7 +201,12 @@ class ScriptModule(Module):
     def __init__(self, root_path, cfg=None, **kwargs):
         self.cfg = cfg or {}
         self.inputs = kwargs
-        super().__init__(root_path)
+        
+        # Render the identity path before initializing the base class
+        template = self.cfg.get("path", "")
+        rendered_path = yamler.render_string(template, **self.inputs)
+        
+        super().__init__(root_path, path=rendered_path)
 
     def path(self):
         """
@@ -215,13 +220,14 @@ class ScriptModule(Module):
         Executes the script commands sequentially.
         """
         env = os.environ.copy()
-        env["SCICD_OUT_DIR"] = str(self.full_path())
+        out_dir = str(self.full_path().resolve())
+        env["SCICD_OUT_DIR"] = out_dir
         for k, v in self.inputs.items():
             env[f"SCICD_INPUT_{k.upper()}"] = str(v)
         for k, v in params.items():
             env[f"SCICD_PARAM_{k.upper()}"] = str(v)
 
-        context = {**self.inputs, **params, "SCICD_OUT_DIR": str(self.full_path())}
+        context = {**self.inputs, **params, "SCICD_OUT_DIR": out_dir}
 
         commands = self.cfg.get("script", [])
         if isinstance(commands, str):

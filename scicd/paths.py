@@ -14,16 +14,16 @@ def module_dir():
     return config.get("internal.module_dir", default="module")
 
 
-def module_yml(name):
+def module_yml(__name__):
     """Returns the expected path to a module YAML file."""
 
-    return yamler.yml_suffix(os.path.join(module_dir(), name))
+    return yamler.yml_suffix(os.path.join(module_dir(), __name__))
 
 
-def module_cfg(name, **kwargs):
+def module_cfg(__name__, **kwargs):
     """Loads the configuration for a named module."""
 
-    return yamler.load_yaml(module_yml(name), **kwargs)
+    return yamler.load_yaml(module_yml(__name__), **kwargs)
 
 
 def ci_dir():

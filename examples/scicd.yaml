@@ -1,11 +1,10 @@
 # SCICD Project Configuration
 # -----------------------------------------------------------------------------
-# [1] INFRASTRUCTURE LAYER (Workspace-Wide)
-# These define WHERE the project lives.
+# [1] INFRASTRUCTURE (Workspace-Wide)
 # -----------------------------------------------------------------------------
 
 storage:
-  output: "results"   # Root directory for local analysis results
+  output: "data"   # Root directory for local analysis results
   remote: "your_rclone_remote:path/to/project" # Remote rclone storage root
   use_branch: true    # Isolate results in subfolders by git branch name
 
@@ -13,8 +12,7 @@ gitlab:
   url: "https://gitlab.com" # Your GitLab instance URL
   project: "your-namespace/your-project" # Full project path (namespace/name)
 
-# [2] EXECUTION LAYER (Module-Overridable Defaults)
-# These define HOW tasks run. These can be precisely tuned in module YAMLs.
+# [2] EXECUTION (Module-Overridable Defaults)
 # -----------------------------------------------------------------------------
 
 logging:

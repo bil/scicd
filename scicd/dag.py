@@ -114,7 +114,6 @@ def get_category_map():
     Returns:
         dict: Mapping of category name to list of associated modules.
     """
-    module_dir = paths.module_dir()
     cat_map = {}
     for module_name in list_modules():
         mod_cfg = paths.module_cfg(module_name)
