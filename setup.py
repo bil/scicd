@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name="scicd",
-    version="0.1.0",
+    version="0.0.1",
     packages=["scicd", "scicd.resources"],
     include_package_data=True,
     package_data={
