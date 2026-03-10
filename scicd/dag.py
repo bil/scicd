@@ -5,7 +5,7 @@ Handles module discovery, topological sorting, and dependency mapping.
 
 import pathlib
 
-from scicd import paths, yamler
+from scicd import paths
 
 
 def list_modules():
@@ -27,10 +27,9 @@ def get_dag():
     Returns:
         dict: Mapping of module name to its list of required dependencies.
     """
-    module_dir = paths.module_dir()
     dag_graph = {}
     for module_name in list_modules():
-        mod_cfg = yamler.load_yaml(f"{module_dir}/{module_name}")
+        mod_cfg = paths.module_cfg(module_name)
         dag_graph[module_name] = mod_cfg.get("needs", [])
     return dag_graph
 
@@ -118,7 +117,7 @@ def get_category_map():
     module_dir = paths.module_dir()
     cat_map = {}
     for module_name in list_modules():
-        mod_cfg = yamler.load_yaml(f"{module_dir}/{module_name}")
+        mod_cfg = paths.module_cfg(module_name)
         category = mod_cfg.get("category", "default")
         if category not in cat_map:
             cat_map[category] = []

@@ -1,82 +1,56 @@
 # SCICD Project Configuration
 # -----------------------------------------------------------------------------
-# This file defines the project-level defaults for the scicd framework.
-# It overrides the framework's internal defaults.
-
-# 1. Pathing and Data Persistence
+# [1] INFRASTRUCTURE LAYER (Workspace-Wide)
+# These define WHERE the project lives.
 # -----------------------------------------------------------------------------
-path:
-  # Local results directory (relative to project root or absolute)
-  output: "data"
 
-  # Remote storage path (for rclone sync)
-  # Example: "remote_name:bucket/project"
-  remote: "your_rclone_remote:path/to/project"
+storage:
+  output: "results"   # Root directory for local analysis results
+  remote: "your_rclone_remote:path/to/project" # Remote rclone storage root
+  use_branch: true    # Isolate results in subfolders by git branch name
 
-  # If true, results are isolated in subdirectories named after the git branch.
-  use_branch: true
-
-# 2. GitLab Infrastructure
-# -----------------------------------------------------------------------------
-# Required for 'scicd run_module ... --executor=gitlab'
 gitlab:
-  # The base URL of your GitLab instance
-  url: "https://gitlab.com"
+  url: "https://gitlab.com" # Your GitLab instance URL
+  project: "your-namespace/your-project" # Full project path (namespace/name)
 
-  # The full path to your project (e.g., "namespace/project_name")
-  project: "your-namespace/your-project"
-
-# 3. Google Cloud Platform (GCP) Infrastructure
+# [2] EXECUTION LAYER (Module-Overridable Defaults)
+# These define HOW tasks run. These can be precisely tuned in module YAMLs.
 # -----------------------------------------------------------------------------
-# Required for distributed 'queue' concurrency method.
+
+logging:
+  verbose: true       # Print EXEC/DONE status and output paths
+
 gcp:
-  # Your GCP Project ID
-  project: "your-gcp-project-id"
+  project: "your-gcp-project-id" # GCP Project for distributed queue
+  pubsub_topic: "your-topic"    # Topic for publishing task inputs
+  pubsub_subscription: "your-subscription" # Subscription for workers
 
-  # The Pub/Sub topic and subscription used for task distribution.
-  pubsub_topic: "your-topic"
-  pubsub_subscription: "your-subscription"
-
-# 4. Local Execution (Joblib)
-# -----------------------------------------------------------------------------
 joblib:
-  # Execution backend: 'threading', 'loky', or 'multiprocessing'
-  backend: "loky"
-  verbose: 10
+  backend: "loky"     # Default parallel backend for ThreadManager
+  verbose: 10         # Joblib's internal verbosity (0-10)
 
-# 5. Global CI/CD Configuration (GitLab)
-# -----------------------------------------------------------------------------
-# These settings map directly to the root-level GitLab CI/CD YAML.
 ci:
+  # Root-level settings for the generated GitLab CI/CD pipeline
   default:
-    # Docker image to use for CI jobs
-    image: "python:3.10"
-
-    # Environment setup before each job
+    image: "python:3.10" # Default container for CI jobs
     before_script:
       - apt-get update && apt-get install -y rclone
       - pip install -e .
       - ./script/install_deps.sh
-
-  # Environment variables available to all CI jobs
   variables:
     KUBERNETES_CPU_REQUEST: 1
     KUBERNETES_MEMORY_REQUEST: 4Gi
     PYTHONUNBUFFERED: "1"
-
-  # Root-level workflow rules (e.g., prevent duplicate pipelines on push)
   workflow:
     rules:
       - if: '$CI_PIPELINE_SOURCE == "push"'
         when: never
       - when: always
 
-# 6. Unified Concurrency Defaults
-# -----------------------------------------------------------------------------
-# These define the default scaling strategy for each environment.
 concurrency:
   local:
-    method: "thread"
-    workers: 2
+    method: "thread"  # Strategy: thread, slice, queue, matrix
+    workers: 2        # Parallelism degree (CPUs/Workers)
   gitlab:
-    method: "matrix"
+    method: "matrix"  # Matrix maps tasks 1:1 to CI jobs
+

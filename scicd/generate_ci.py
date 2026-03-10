@@ -43,9 +43,8 @@ def generate_child_yml(module_name, module_cfg):
     module.make(out_dir)
     out_path = os.path.join(out_dir, f"{module_name}.yml")
 
-    res = config.get_module_config(module_cfg)
-    conc = res["concurrency"]["gitlab"]
-    m, w = conc["method"], conc["workers"]
+    m = config.get("concurrency.gitlab.method", module_cfg=module_cfg)
+    w = config.get("concurrency.gitlab.workers", module_cfg=module_cfg)
 
     mgr = manager.get_manager(m, module_name)
     module_ci_overrides = module_cfg.get("ci", {})
@@ -53,11 +52,12 @@ def generate_child_yml(module_name, module_cfg):
 
     ci_out = {
         "stages": ["dispatch"],
-        "default": res["ci"]["default"],
-        "variables": res["ci"]["variables"],
+        "default": config.get("ci.default", module_cfg=module_cfg),
+        "variables": config.get("ci.variables", module_cfg=module_cfg),
     }
-    if "workflow" in res["ci"]:
-        ci_out["workflow"] = res["ci"]["workflow"]
+    workflow = config.get("ci.workflow", module_cfg=module_cfg)
+    if workflow:
+        ci_out["workflow"] = workflow
 
     # 1. Handle Preparation Stage
     if mgr.has_prepare:
@@ -157,7 +157,7 @@ def generate_ci():
     current_dag = dag.get_dag()
     for rank in ranks:
         for module_name in rank:
-            mod_cfg = yamler.load_yaml(f"{paths.module_dir()}/{module_name}")
+            mod_cfg = paths.module_cfg(module_name)
             module_ci_overrides = mod_cfg.get("ci", {})
             generate_child_yml(module_name, mod_cfg)
 

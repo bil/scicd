@@ -7,7 +7,7 @@ import sys
 
 import fire
 
-from scicd import config, dag, generate_ci, runner, yamler
+from scicd import config, dag, generate_ci, lint, runner, yamler
 
 
 def main():
@@ -20,6 +20,7 @@ def main():
     fire.Fire(
         {
             "show_config": config.show_config,
+            "lint_config": lint.lint_config,
             "run_all": runner.run_all,
             "run_module": runner.run_module,
             "run_category": runner.run_category,

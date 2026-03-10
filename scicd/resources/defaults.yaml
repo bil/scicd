@@ -1,50 +1,57 @@
 # LEVEL 5: Framework Defaults
-# Mandatory project-specific keys are set to null.
+# -----------------------------------------------------------------------------
 
-# Framework Internal Paths
+# [1] INFRASTRUCTURE LAYER (Workspace-Wide)
+# Overriding in modules is ignored.
+
+# Internal framework pathing and behavior
 internal:
-  module_dir: "module"
-  ci_dir: "ci"
+  module_dir: "module"    # Directory containing module YAML files
+  ci_dir: "ci"            # Directory for generated CI artifacts
 
-# Global Logging Configuration
-logging:
-  verbose: true
 
-# Project Pathing and Durability
-path:
-  output: null
-  remote: null
-  use_branch: false
-  deposition_url: null
+# Project-wide data storage and pathing logic
+storage:
+  output: null            # Local results root directory
+  remote: null            # Remote storage root (rclone remote:path)
+  use_branch: false       # If true, isolates results by git branch name
+  deposition_url: null    # HTTP endpoint for fetching missing resources
 
-# GitLab Infrastructure
+# GitLab API integration for remote pipeline triggering
 gitlab:
   url: "https://gitlab.com"
-  project: null
+  project: null           # Full GitLab project path (namespace/project)
 
-# Google Cloud Platform Infrastructure
+# [2] EXECUTION LAYER (Module-Overridable)
+# Modules can override these in their YAML.
+
+# Global console logging and verbosity
+logging:
+  verbose: true           # If true, prints execution status and paths
+
+# Google Cloud Platform settings for distributed 'queue' concurrency
 gcp:
-  project: null
-  pubsub_topic: null
-  pubsub_subscription: null
+  project: null           # GCP Project ID
+  pubsub_topic: null      # Pub/Sub topic for task distribution
+  pubsub_subscription: null # Pub/Sub subscription for workers
 
-# Joblib Local Engine Configuration
+# Configuration for local parallel processing via Joblib
 joblib:
-  backend: "threading"
-  verbose: 10
+  backend: "threading"    # Parallel backend (threading, loky, multiprocessing)
+  verbose: 10             # Joblib-internal verbosity level
 
-# Global CI/CD settings (GitLab)
+# Global GitLab CI/CD pipeline defaults
 ci:
-  # Maps to GitLab root 'default:'
+  # Maps to GitLab root 'default:' block
   default:
     tags:
-      - "$RUNNER"
+      - "$RUNNER"         # Hardware tags for GitLab runners
 
-# Unified Concurrency Schema
+# Default scaling strategies for different environments
 concurrency:
   local:
-    method: "thread"
-    workers: 1
+    method: "thread"      # Default local scaling method
+    workers: 1            # Default local worker count
   gitlab:
-    method: "matrix"
-    workers: null
+    method: "matrix"      # Default CI scaling method
+    workers: null         # Matrix size (if applicable)

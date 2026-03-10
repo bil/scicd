@@ -4,7 +4,6 @@ Orchestration engine for DAG traversal and task dispatching.
 
 import os
 import subprocess
-import importlib
 
 from abc import ABC, abstractmethod
 
@@ -189,13 +188,14 @@ class LocalRunner(Runner):
         for name in module_names:
             print(f"--- {name} ({self.name}) ---")
 
-            module_dir = paths.module_dir()
-            module_cfg = yamler.load_yaml(f"{module_dir}/{name}.yml.j2")
-            res = config.get_module_config(module_cfg)
-            conc = res["concurrency"][self.name]
+            module_cfg = paths.module_cfg(name)
 
-            m = method or conc["method"]
-            w = workers or conc["workers"]
+            m = method or config.get(
+                f"concurrency.{self.name}.method", module_cfg=module_cfg
+            )
+            w = workers or config.get(
+                f"concurrency.{self.name}.workers", module_cfg=module_cfg
+            )
 
             mgr = manager.get_manager(m, name)
             if self.name not in mgr.supported_executors:
@@ -312,8 +312,7 @@ def _run_hook(module_name, hook_name):
     Executes a module hook (pre or post).
     Automatically initializes root results directory.
     """
-    module_dir = paths.module_dir()
-    cfg = yamler.load_yaml(f"{module_dir}/{module_name}")
+    cfg = paths.module_cfg(module_name)
     hook_cfg = cfg.get(hook_name)
 
     if not hook_cfg:
@@ -344,12 +343,8 @@ def _run_hook(module_name, hook_name):
             cmd = yamler.render_string(cmd_template, **kwargs)
             print(f"HOOK {module_name}.{hook_name} -> {cmd}")
             subprocess.run(cmd, shell=True, cwd=str(root_path), check=True)
-    elif "src" in hook_cfg:
-        mod = importlib.import_module(hook_cfg["src"])
-        cls = getattr(mod, hook_cfg.get("class", "Hook"))
-        cls(**kwargs)
     else:
-        # Fallback if there's a hook block without script or src
+        # Fallback if there's a hook block without script
         module_cls = module.get_module_class(module_name)
         if hasattr(module_cls, hook_name):
             print(f"HOOK {module_name}.{hook_name} (OOP)")
@@ -386,8 +381,7 @@ def prepare_module(module_name, method):
         module_name (str): Target module.
         method (str): Scaling strategy.
     """
-    module_dir = paths.module_dir()
-    module_cfg = yamler.load_yaml(f"{module_dir}/{module_name}.yml.j2")
+    module_cfg = paths.module_cfg(module_name)
     mgr = manager.get_manager(method, module_name)
 
     if mgr.has_prepare:
@@ -408,8 +402,7 @@ def dispatch_module(module_name, method, workers=None):
     mgr = manager.get_manager(method, module_name)
 
     if method == "thread":
-        module_dir = paths.module_dir()
-        module_cfg = yamler.load_yaml(f"{module_dir}/{module_name}.yml.j2")
+        module_cfg = paths.module_cfg(module_name)
         res = config.get_module_config(module_cfg)
 
         # Ensure workers is an integer or None for Joblib
@@ -455,7 +448,20 @@ def get_runner(name="local", **kwargs):
 def run_module(
     *module_names, workers=None, method=None, executor="local", **runner_kwargs
 ):
-    """Public initiator for module execution."""
+    """
+    Executes one or more modules by name.
+
+    Args:
+        *module_names: Names of the modules to execute.
+        workers (int, optional): Degree of parallelism (threads or CI nodes).
+            Overrides the 'workers' value in the configuration.
+        method (str, optional): Scaling strategy (thread, matrix, slice, queue).
+            Overrides the default 'method' for the selected environment.
+        executor (str): Where to initiate execution ('local' or 'gitlab').
+            - 'local': Runs tasks on the current machine.
+            - 'gitlab': Triggers a remote pipeline via the GitLab API.
+        **runner_kwargs: Additional environment-specific parameters (e.g., 'branch' for gitlab).
+    """
     get_runner(executor, **runner_kwargs).run_module(
         *module_names, workers=workers, method=method
     )
@@ -464,7 +470,16 @@ def run_module(
 def run_rank(
     *module_names, workers=None, method=None, executor="local", **runner_kwargs
 ):
-    """Public initiator for rank-based execution."""
+    """
+    Executes a forward-slice of the DAG starting from the target modules' rank.
+
+    Args:
+        *module_names: Modules defining the starting execution rank.
+        workers (int, optional): Parallel worker count override.
+        method (str, optional): Scaling strategy override.
+        executor (str): Execution initiator ('local' or 'gitlab').
+        **runner_kwargs: Additional environment-specific parameters.
+    """
     get_runner(executor, **runner_kwargs).run_rank(
         *module_names, workers=workers, method=method
     )
@@ -473,7 +488,16 @@ def run_rank(
 def run_subgraph(
     *module_names, workers=None, method=None, executor="local", **runner_kwargs
 ):
-    """Public initiator for subgraph execution."""
+    """
+    Executes the target modules and all of their descendants in the DAG.
+
+    Args:
+        *module_names: Root modules of the subgraph to execute.
+        workers (int, optional): Parallel worker count override.
+        method (str, optional): Scaling strategy override.
+        executor (str): Execution initiator ('local' or 'gitlab').
+        **runner_kwargs: Additional environment-specific parameters.
+    """
     get_runner(executor, **runner_kwargs).run_subgraph(
         *module_names, workers=workers, method=method
     )
@@ -482,12 +506,29 @@ def run_subgraph(
 def run_category(
     *category_names, workers=None, method=None, executor="local", **runner_kwargs
 ):
-    """Public initiator for category execution."""
+    """
+    Executes all modules belonging to the specified semantic categories.
+
+    Args:
+        *category_names: Categories (defined in module YAML) to execute.
+        workers (int, optional): Parallel worker count override.
+        method (str, optional): Scaling strategy override.
+        executor (str): Execution initiator ('local' or 'gitlab').
+        **runner_kwargs: Additional environment-specific parameters.
+    """
     get_runner(executor, **runner_kwargs).run_category(
         *category_names, workers=workers, method=method
     )
 
 
 def run_all(workers=None, method=None, executor="local", **runner_kwargs):
-    """Public initiator for DAG execution."""
+    """
+    Executes the entire discovered module DAG in topological order.
+
+    Args:
+        workers (int, optional): Parallel worker count override.
+        method (str, optional): Scaling strategy override.
+        executor (str): Execution initiator ('local' or 'gitlab').
+        **runner_kwargs: Additional environment-specific parameters.
+    """
     get_runner(executor, **runner_kwargs).run_all(workers=workers, method=method)

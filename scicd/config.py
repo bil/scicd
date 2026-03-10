@@ -35,14 +35,15 @@ def get_module_config(module_cfg):
     return yamler.deep_update(get_config(), module_cfg)
 
 
-def get(key, default=None, required=False):
+def get(key, default=None, required=False, module_cfg=None):
     """
     Retrieves a configuration value using dot-notation.
 
     Args:
-        key (str): Dot-notation key (e.g., 'path.output').
+        key (str): Dot-notation key (e.g., 'storage.output').
         default (any, optional): Value to return if key is missing.
         required (bool): If True, raises ValueError if key is missing.
+        module_cfg (dict, optional): Module configuration to merge with base config before lookup.
 
     Returns:
         any: The configuration value.
@@ -50,20 +51,21 @@ def get(key, default=None, required=False):
     Raises:
         ValueError: If required is True and the key is missing.
     """
-    cfg = get_config()
+    cfg = get_module_config(module_cfg) if module_cfg else get_config()
+
     parts = key.split(".")
     val = cfg
-    
+
     try:
         for part in parts:
             val = val[part]
         return val
-    except (KeyError, TypeError):
+    except (KeyError, TypeError) as e:
         if required:
             raise ValueError(
                 f"Missing required configuration: '{key}'\n"
                 f"Check your scicd.yaml or run 'scicd show_config' to verify."
-            )
+            ) from e
         return default
 
 

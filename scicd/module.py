@@ -22,7 +22,7 @@ class Module(ABC):
     Subclasses must accept 'root_path' as their first __init__ argument.
     """
 
-    def __init__(self, root_path, path=None, **kwargs):
+    def __init__(self, root_path, path=None):
         """
         Initializes the module instance.
 
@@ -92,7 +92,7 @@ class Module(ABC):
         if local_file.exists():
             return local_file
 
-        deposition_url = config.get("path.deposition_url")
+        deposition_url = config.get("storage.deposition_url")
 
         if deposition_url:
             print(f"Resource missing: {filename}. Fetching from {deposition_url}...")
@@ -104,7 +104,7 @@ class Module(ABC):
 
         raise FileNotFoundError(
             f"Resource '{filename}' missing locally for {self.__class__.__name__}.\n"
-            f"No 'path.deposition_url' configured for remote fetching.\n"
+            f"No 'storage.deposition_url' configured for remote fetching.\n"
             f"Run {self.__class__.__name__} to generate this file."
         )
 
@@ -174,7 +174,7 @@ def get_root_path(module_name):
     Returns:
         pathlib.Path: The absolute root path.
     """
-    cfg = yamler.load_yaml(f"{paths.module_dir()}/{module_name}")
+    cfg = paths.module_cfg(module_name)
     return paths.local_path(cfg["root_path"])
 
 
@@ -245,7 +245,7 @@ def get_module_class(module_name):
     Returns:
         class: The Python class inherited from Module.
     """
-    cfg = yamler.load_yaml(f"{paths.module_dir()}/{module_name}")
+    cfg = paths.module_cfg(module_name)
     if "script" in cfg:
         return ScriptModule
     mod = importlib.import_module(cfg["src"])
@@ -261,9 +261,9 @@ def get_module_instance(module_name, **kwargs):
         **kwargs: Task inputs.
 
     Returns:
-        Module: An instance of the module class.
+        instance (Module): An instance of the module class.
     """
-    cfg = yamler.load_yaml(f"{paths.module_dir()}/{module_name}", **kwargs)
+    cfg = paths.module_cfg(module_name, **kwargs)
     kwargs["root_path"] = cfg["root_path"]
 
     if "script" in cfg:

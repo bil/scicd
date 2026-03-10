@@ -10,6 +10,7 @@ import pathlib
 from scicd.module import Module
 from scicd.paths import local_path
 
+
 class Independent(Module):
     """
     A simple module that runs independently of others.
@@ -132,7 +133,7 @@ class Hello(Module):
 
         # Dependency check: try to read from PubsubExample
         pubsub_path = local_path("queue_demo") / "final.txt"
-        
+
         if pubsub_path.exists():
             print(f"Found PubsubExample output at {pubsub_path}")
             with open(pubsub_path, "r", encoding="utf-8") as f:
@@ -148,6 +149,6 @@ class Hello(Module):
         output_file = self.full_path() / "greeting.txt"
         with open(output_file, "w", encoding="utf-8") as f:
             f.write(greeting + "\n")
-        
+
         print(f"Output path: {self.full_path()}")
         return greeting

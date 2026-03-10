@@ -6,12 +6,24 @@ import os
 import pathlib
 import subprocess
 
-from scicd import config
+from scicd import config, yamler
 
 
 def module_dir():
     """Returns directory for module YAML files."""
-    return config.get_config()["internal"]["module_dir"]
+    return config.get("internal.module_dir", default="module")
+
+
+def module_yml(name):
+    """Returns the expected path to a module YAML file."""
+
+    return yamler.yml_suffix(os.path.join(module_dir(), name))
+
+
+def module_cfg(name, **kwargs):
+    """Loads the configuration for a named module."""
+
+    return yamler.load_yaml(module_yml(name), **kwargs)
 
 
 def ci_dir():
@@ -35,28 +47,28 @@ def get_branch():
 
 def get_namespace():
     """Resolves project namespace if enabled."""
-    cfg = config.get_config()["path"]
-    if str(cfg["use_branch"]).lower() != "true":
+    use_branch = config.get("storage.use_branch", default=False)
+    if str(use_branch).lower() != "true":
         return ""
 
     branch = get_branch()
     if not branch:
         raise RuntimeError(
-            "Git branch required for namespace. Set use_branch: false in scicd.yaml."
+            "Git branch required for namespace. Set storage.use_branch: false in scicd.yaml."
         )
     return branch
 
 
 def root():
     """Resolves base local results directory."""
-    cfg = config.get_config()["path"]
-    return pathlib.Path(cfg["output"]) / get_namespace()
+    output = config.get("storage.output", required=True)
+    return pathlib.Path(output) / get_namespace()
 
 
 def remote_root():
     """Resolves base remote storage root."""
-    cfg = config.get_config()["path"]
-    return pathlib.Path(cfg["remote"]) / get_namespace()
+    remote = config.get("storage.remote", required=True)
+    return pathlib.Path(remote) / get_namespace()
 
 
 def local_path(path):

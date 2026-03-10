@@ -48,8 +48,7 @@ def form_cfg(module_name, **kwargs):
     Returns:
         dict: Resolved configuration dictionary.
     """
-    path = f"{paths.module_dir()}/{module_name}.yml.j2"
-    cfg = yamler.load_yaml(path, **kwargs)
+    cfg = paths.module_cfg(module_name, **kwargs)
     cfg.setdefault("param", {})
     cfg["param_merged"] = specify(cfg["param"], cfg.get("overwrite"), **kwargs)
     return cfg
@@ -68,14 +67,11 @@ def exec_module(module_name, verbose=None, **kwargs):
     Returns:
         any: Output from the module instance's run method.
     """
-    if verbose is None:
-        verbose = config.get("logging.verbose", default=True)
-
-    if not kwargs and "SCICD_INPUT" in os.environ:
-        kwargs = json.loads(os.environ["SCICD_INPUT"])
-
     instance = module.get_module_instance(module_name, **kwargs)
     module_cfg = form_cfg(module_name, **kwargs)
+
+    if verbose is None:
+        verbose = config.get("logging.verbose", default=True, module_cfg=module_cfg)
 
     if verbose:
         print(f"EXEC {module_name} | {kwargs}")
@@ -113,13 +109,8 @@ def get_inputs(module_name, module_cfg):
             cmd, shell=True, capture_output=True, text=True, check=True
         )
         return json.loads(res.stdout)
-        # elif "src" in gen_cfg:
-        #     import importlib
-        #     mod = importlib.import_module(gen_cfg["src"])
-        #     func = getattr(mod, gen_cfg.get("class", "generate"))
-        #     return func(**gen_cfg.get("param", {}))
 
-    # Check if using Module object
+    # Check if using Module object (OOP fallback)
     module_cls = module.get_module_class(module_name)
     if hasattr(module_cls, "input_generator"):
         gen_cfg = module_cfg.get("input_generator", {})
@@ -145,6 +136,7 @@ class ModuleManager(ABC):
             module_name (str): Name of the module being managed.
         """
         self.module_name = module_name
+        self.module_cfg = paths.module_cfg(module_name)
 
     @property
     def has_prepare(self):
@@ -189,12 +181,13 @@ class ThreadManager(ModuleManager):
             **kwargs: Must contain 'workers' (int).
         """
         workers = kwargs.get("workers") or 1
-        cfg = yamler.load_yaml(f"{paths.module_dir()}/{self.module_name}.yml.j2")
-        inputs = get_inputs(self.module_name, cfg)
-        res = config.get_module_config(cfg)
+        inputs = get_inputs(self.module_name, self.module_cfg)
+
+        # Merge joblib settings with module overrides
+        joblib_cfg = config.get("joblib", module_cfg=self.module_cfg)
 
         print(f"Thread | Parallel: {len(inputs)} tasks | {workers} workers")
-        Parallel(n_jobs=workers, **res["joblib"])(
+        Parallel(n_jobs=workers, **joblib_cfg)(
             delayed(exec_module)(self.module_name, **task) for task in inputs
         )
 
@@ -226,8 +219,7 @@ class SliceManager(ModuleManager):
         """
         Resolves the full input list and executes its assigned slice.
         """
-        cfg = yamler.load_yaml(f"{paths.module_dir()}/{self.module_name}.yml.j2")
-        inputs = get_inputs(self.module_name, cfg)
+        inputs = get_inputs(self.module_name, self.module_cfg)
 
         total = int(os.environ["CI_NODE_TOTAL"])
         index = int(os.environ["CI_NODE_INDEX"]) - 1
@@ -253,9 +245,10 @@ class QueueManager(ModuleManager):
         Args:
             inputs (list): Task inputs to publish.
         """
-        cfg = config.get_config()["gcp"]
+        gcp_cfg = config.get("gcp", module_cfg=self.module_cfg)
         qm = PubSubManager(
-            topic_id=cfg["pubsub_topic"], subscription_id=cfg["pubsub_subscription"]
+            topic_id=gcp_cfg["pubsub_topic"],
+            subscription_id=gcp_cfg["pubsub_subscription"],
         )
         qm.drain_subscription()
         print(f"Queue | Publishing {len(inputs)} tasks...")
@@ -265,9 +258,10 @@ class QueueManager(ModuleManager):
         """
         Continuous worker loop pulling and executing tasks from the queue.
         """
-        cfg = config.get_config()["gcp"]
+        gcp_cfg = config.get("gcp", module_cfg=self.module_cfg)
         qm = PubSubManager(
-            topic_id=cfg["pubsub_topic"], subscription_id=cfg["pubsub_subscription"]
+            topic_id=gcp_cfg["pubsub_topic"],
+            subscription_id=gcp_cfg["pubsub_subscription"],
         )
 
         print("Queue | Worker active.")
