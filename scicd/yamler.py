@@ -61,7 +61,7 @@ def find_includes(path):
     """
     path = yml_suffix(path)
     if not pathlib.Path(path).exists():
-        return []
+        raise FileNotFoundError(f"Include file not found: {path}")
     post = frontmatter.load(path)
     return post.get("include", [])
 
@@ -149,7 +149,7 @@ def load_yaml(path, **kwargs):
     """
     path = yml_suffix(path)
     if not pathlib.Path(path).exists():
-        return {}
+        raise FileNotFoundError(f"YAML file not found: {path}")
 
     context = extract_context(path, **kwargs)
     post = frontmatter.load(path)

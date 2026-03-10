@@ -38,7 +38,8 @@ INFRA_KEYS = {"internal", "storage", "gitlab"}
 
 # Rules for linter validation
 SCHEMA_MANDATORY = {"root_path"}
-SCHEMA_EXCLUSIVE = [("src", "script"), ("input", "input_generator")]
+SCHEMA_EXCLUSIVE = [("input", "input_generator"), ("src", "script")]
+SCHEMA_ONEOF = [("src", "script")]
 SCHEMA_DEPENDENT = {"script": ["path"]}
 SCHEMA_FORBIDDEN = {"script": ["class"]}
 
@@ -103,18 +104,21 @@ def lint_config(*module_names):
                         f"[{name}] Key '{k}' must be of type {type_names} (got {type(v).__name__})."
                     )
 
-            # D. Mutually Exclusive Keys
+            # Mutually Exclusive Keys
             for set_a, set_b in SCHEMA_EXCLUSIVE:
                 if set_a in body and set_b in body:
                     errors.append(
                         f"[{name}] Cannot define both '{set_a}' and '{set_b}'."
                     )
+
+            # Required from set of keys
+            for set_a, set_b in SCHEMA_ONEOF:
                 if set_a not in body and set_b not in body:
                     errors.append(
                         f"[{name}] Must define either '{set_a}' or '{set_b}'."
                     )
 
-            # E. Dependent Keys
+            # Dependent Keys
             for trigger, deps in SCHEMA_DEPENDENT.items():
                 if trigger in body:
                     for dep in deps:
@@ -152,20 +156,26 @@ def lint_config(*module_names):
                                 f"[{name}] Script modules must define 'script' for '{hook}' hook."
                             )
 
-            # H. Overwrite Structure
+            # H. Input List Structure
+            if "input" in body:
+                for idx, entry in enumerate(body["input"]):
+                    if not isinstance(entry, dict):
+                        errors.append(f"[{name}] 'input' entry #{idx} must be a dict.")
+
+            # I. Overwrite Structure
             if "overwrite" in body:
                 for idx, rule in enumerate(body["overwrite"]):
-                    if (
-                        not isinstance(rule, dict)
-                        or "input" not in rule
-                        or "param" not in rule
-                    ):
-                        errors.append(
-                            f"[{name}] 'overwrite' rule #{idx} must have 'input' and 'param' dicts."
-                        )
+                    if not isinstance(rule, dict):
+                        errors.append(f"[{name}] 'overwrite' rule #{idx} must be a dict.")
+                        continue
+                    if "input" not in rule or not isinstance(rule["input"], dict):
+                        errors.append(f"[{name}] 'overwrite' rule #{idx} must have an 'input' dict.")
+                    if "param" not in rule or not isinstance(rule["param"], dict):
+                        errors.append(f"[{name}] 'overwrite' rule #{idx} must have a 'param' dict.")
 
-        except (yaml.YAMLError, ValueError, TemplateError) as e:
+        except (yaml.YAMLError, ValueError, TemplateError, FileNotFoundError) as e:
             errors.append(f"[{name}] Configuration error: {str(e)}")
+
         except Exception as e:
             # Re-raise unexpected system/internal errors
             print(f"[{name} ] ERROR")

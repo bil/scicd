@@ -1,6 +1,12 @@
 root_path: script_demo
 path: "{{ subject }}"
 
+pre:
+  param: { setup_msg: "Initializing" }
+  script:
+    - 'echo "$SCICD_PARAM_SETUP_MSG for subject list in $SCICD_ROOT_DIR"'
+    - 'mkdir -p "$SCICD_ROOT_DIR/logs"'
+
 script:
   - 'echo "Running analysis for subject {{ subject }} with threshold $SCICD_PARAM_THRESHOLD"'
   - "sleep 1"

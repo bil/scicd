@@ -103,7 +103,7 @@ These keys allow a module to tune its environment, overriding the global `scicd.
 
 ### Lifecycle Hooks (`pre` / `post` / `input_generator`)
 
-Hooks allow executing logic before, after, or to define the input list of the main task.
+Hooks allow executing logic before, after, or to define the input list of the main task. These are **deterministic** and executed without instantiating the module class. They do not have access to task-specific inputs or regex overrides.
 
 - **`pre` / `post`**: Standard setup and cleanup hooks.
 - **`input_generator`**: Specialized hook to dynamically produce the module's `input` list.
@@ -117,13 +117,47 @@ Each hook is a dictionary containing:
 
 #### OOP Fallback (Python Modules Only)
 
-For Python modules (`src`), if a hook dictionary is provided without a `script` key, the framework automatically calls the corresponding static method on the task class: `MyClass.pre()`, `MyClass.post()`, or `MyClass.input_generator()`.
+For Python modules (`src`), if a hook dictionary is provided without a `script` key, the framework automatically calls the corresponding **static/class method** on the task class: `MyClass.pre()`, `MyClass.post()`, or `MyClass.input_generator()`. These methods must be implemented to accept the hook's `param` dictionary.
 
 #### Constraints
 
 - **Script Modules**: MUST provide a `script` key for every hook used. They cannot use OOP fallbacks.
 - **Script Modules**: Prohibited from defining a `class` key.
 - **JSON Output**: `input_generator` scripts must print a JSON list of dictionaries to `stdout`.
+
+---
+
+### Script Environment Reference
+
+Modules using the `script` backend (and all script-based hooks) receive a rich set of environment variables for easy integration with existing CLI tools.
+
+#### Standard Variables
+
+| Variable | Description |
+| :--- | :--- |
+| **`SCICD_ROOT_DIR`** | Absolute path to the module's root results directory. |
+| **`SCICD_OUT_DIR`** | Absolute path to the instance-specific results folder (for hooks, this matches `ROOT_DIR`). |
+| **`SCICD_INPUT`** | JSON-encoded string containing all task identity inputs. |
+| **`SCICD_PARAM`** | JSON-encoded string containing all behavioral parameters. |
+
+#### Individual Context Variables
+
+The framework also injects every key from `input` and `param` as individual uppercase variables:
+
+- **`SCICD_INPUT_<KEY>`**: e.g., `SCICD_INPUT_SUBJECT`
+- **`SCICD_PARAM_<KEY>`**: e.g., `SCICD_PARAM_THRESHOLD`
+
+*Note: For nested structures, individual variables contain the string representation. Use `jq` with the JSON blobs for robust parsing of complex data.*
+
+#### Bash Integration Example
+
+```bash
+# Simple usage (Top-level parameters)
+echo "Processing $SCICD_INPUT_SUBJECT with threshold $SCICD_PARAM_THRESHOLD"
+
+# Complex usage (Nested data via jq)
+METADATA=$(echo $SCICD_PARAM | jq -r '.analysis.metadata')
+```
 
 ---
 

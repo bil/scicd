@@ -219,15 +219,31 @@ class ScriptModule(Module):
         """
         Executes the script commands sequentially.
         """
+        import json
+
         env = os.environ.copy()
         out_dir = str(self.full_path().resolve())
+        root_dir = str(self.full_root_path().resolve())
+
         env["SCICD_OUT_DIR"] = out_dir
+        env["SCICD_ROOT_DIR"] = root_dir
+
+        # Individual variables
         for k, v in self.inputs.items():
             env[f"SCICD_INPUT_{k.upper()}"] = str(v)
         for k, v in params.items():
             env[f"SCICD_PARAM_{k.upper()}"] = str(v)
 
-        context = {**self.inputs, **params, "SCICD_OUT_DIR": out_dir}
+        # JSON blobs
+        env["SCICD_INPUT"] = json.dumps(self.inputs)
+        env["SCICD_PARAM"] = json.dumps(params)
+
+        context = {
+            **self.inputs,
+            **params,
+            "SCICD_OUT_DIR": out_dir,
+            "SCICD_ROOT_DIR": root_dir,
+        }
 
         commands = self.cfg.get("script", [])
         if isinstance(commands, str):
@@ -236,9 +252,7 @@ class ScriptModule(Module):
         for cmd_template in commands:
             cmd = yamler.render_string(cmd_template, **context)
             print(f"Running: {cmd}")
-            subprocess.run(
-                cmd, shell=True, env=env, cwd=str(self.full_path()), check=True
-            )
+            subprocess.run(cmd, shell=True, env=env, cwd=out_dir, check=True)
 
 
 def get_module_class(module_name):

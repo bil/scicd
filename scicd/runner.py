@@ -328,26 +328,23 @@ def _run_hook(module_name, hook_name):
         getattr(module_cls, hook_name)(**kwargs)
         return
 
-    root_path = paths.local_path(cfg["root_path"])
-    module.make(root_path)
-
-    kwargs = hook_cfg.get("param", {}).copy()
-    kwargs["root_path"] = root_path
+    root_path = cfg["root_path"]
+    module.make(paths.local_path(root_path))
 
     if "script" in hook_cfg:
-        commands = hook_cfg["script"]
-        if isinstance(commands, str):
-            commands = [commands]
-
-        for cmd_template in commands:
-            cmd = yamler.render_string(cmd_template, **kwargs)
-            print(f"HOOK {module_name}.{hook_name} -> {cmd}")
-            subprocess.run(cmd, shell=True, cwd=str(root_path), check=True)
+        # Use ScriptModule to handle environment injection and rendering
+        hook_params = hook_cfg.get("param", {})
+        print(f"HOOK {module_name}.{hook_name} (Script)")
+        
+        adapter = module.ScriptModule(root_path, cfg=hook_cfg)
+        adapter.run(**hook_params)
     else:
         # Fallback if there's a hook block without script
         module_cls = module.get_module_class(module_name)
         if hasattr(module_cls, hook_name):
             print(f"HOOK {module_name}.{hook_name} (OOP)")
+            kwargs = hook_cfg.get("param", {}).copy()
+            kwargs["root_path"] = paths.local_path(root_path)
             getattr(module_cls, hook_name)(**kwargs)
 
 

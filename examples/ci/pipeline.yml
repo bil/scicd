@@ -125,9 +125,18 @@ ScriptTest:__push__:
   - scicd push_data --path=script_demo --folders_first=True
   stage: ScriptTest
 
-ScriptTest:run:
+ScriptTest:pre:
   needs:
   - job: __pull__
+    optional: true
+  rules: *id005
+  script:
+  - scicd run_pre ScriptTest
+  stage: ScriptTest
+
+ScriptTest:run:
+  needs:
+  - job: ScriptTest:pre
     optional: true
   rules: *id005
   stage: ScriptTest
