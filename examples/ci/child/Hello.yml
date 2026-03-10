@@ -20,6 +20,7 @@ Hello:name=World:
 default:
   before_script:
   - apt-get update && apt-get install -y rclone
+  - pip install -e .
   - ./script/install_deps.sh
   image: python:3.10
   tags:

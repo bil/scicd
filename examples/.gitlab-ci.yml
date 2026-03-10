@@ -1,21 +1,12 @@
 
-Independent:dispatch:
-  parallel: 2
-  script:
-  - scicd dispatch_module Independent --method=slice
-  stage: dispatch
-
 default:
+  tags:
+  - $RUNNER
+  image: python:3.10
   before_script:
   - apt-get update && apt-get install -y rclone
   - pip install -e .
   - ./script/install_deps.sh
-  image: python:3.10
-  tags:
-  - $RUNNER
-
-stages:
-- dispatch
 
 variables:
   KUBERNETES_CPU_REQUEST: 1
@@ -27,3 +18,14 @@ workflow:
   - if: $CI_PIPELINE_SOURCE == "push"
     when: never
   - when: always
+
+include:
+- local: ci/pipeline.yml
+
+stages:
+- __pull__
+- Independent
+- PubsubExample
+- ScriptTest
+- Hello
+- IndependentStill
