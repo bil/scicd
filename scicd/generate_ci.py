@@ -105,7 +105,7 @@ def generate_child_yml(module_name, module_cfg):
 
 def update_gitlab_ci_stages(ranks):
     """
-    Updates root .gitlab-ci.yml with include and topological stages.
+    Updates root .gitlab-ci.yml with global project settings and topological stages.
 
     Args:
         ranks (list): Topological sorting of module ranks.
@@ -116,11 +116,19 @@ def update_gitlab_ci_stages(ranks):
             ci_yml = yaml.safe_load(f) or {}
     else:
         ci_yml = {}
+
+    # Sync all global CI settings from project config
+    cfg_ci = config.get_config().get("ci", {})
+    for k, v in cfg_ci.items():
+        ci_yml[k] = v
+
+    # Ensure scicd-specific include and stages take precedence
     ci_yml["include"] = [{"local": f"{ci_dir}/pipeline.yml"}]
     new_stages = ["__pull__"]
     for rank in ranks:
         new_stages.extend(rank)
     ci_yml["stages"] = new_stages
+
     yamler.dump_yaml_with_newlines(ci_yml, ci_path, sort_keys=False)
 
 
