@@ -8,6 +8,8 @@ import sys
 import fire
 import scicd.build
 import scicd.gitlab
+import scicd.config
+
 
 def main():
     """
@@ -20,6 +22,7 @@ def main():
             "build_gitlab": scicd.build.build_gitlab,
             "run_gitlab_pipeline": scicd.gitlab.run_pipeline,
             "lint_gitlab": scicd.gitlab.lint_pipeline,
+            "config": scicd.config.get_config
         }
     )
 

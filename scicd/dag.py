@@ -4,7 +4,7 @@ import luigi
 import json
 import re
 from typing import List
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 import yaml
 from scicd.config import SciCDConfig
 from abc import ABC, abstractmethod
@@ -51,6 +51,10 @@ class BaseNode(ABC):
         """Standardized config lookup for all nodes."""
         return SciCDConfig().family_config(self.family)
 
+    @cached_property
+    def workspace_cfg(self):
+        return SciCDConfig().workspace_config()
+
     @property
     def needs(self) -> List[str]:
         """
@@ -94,24 +98,31 @@ class SliceNode(BaseNode):
         ]
         params_json = json.dumps(all_task_params)
 
+        # Serialize Resolved Configuration (The Source of Truth)
+        cfg_json = json.dumps(asdict(self.cfg))
+
+        # Serialize GitLab boilerplate
+        gitlab_info_json = json.dumps(self.gitlab_info())
+
         gen_id = f"{self.family}_rank{self.rank}_gen"
 
         # Generator
         gen_job = self.gitlab_info()
         gen_job["stage"] = f"stage_{self.rank}"
         gen_job["script"] = [
-            f"python -m scicd.slice generate "
+            f"{self.cfg.python_executable} -m scicd.slice generate "
             f"--module {self.tasks[0].__module__} "
             f"--family {self.family} "
             f"--all_params_json '{params_json}' "
-            f"--num_workers {self.cfg.concurrency_workers} "
-            f"--image {self.cfg.image}"
+            f"--cfg_json {cfg_json} "
+            f"--gitlab_info_json {gitlab_info_json}"
         ]
         gen_job["artifacts"] = {"paths": ["manifest.yml", "child_pipeline.yml"]}
         if self.needs:
             gen_job["needs"] = self.needs
 
-        # --- JOB 2: The Trigger ---
+        # Trigger
+        # These can have limited keys
         trigger_job = {
             "stage": f"stage_{self.rank}",
             "trigger": {
@@ -120,6 +131,7 @@ class SliceNode(BaseNode):
             },
             "needs": [gen_id],
         }
+        trigger_job["needs"] = [gen_id]
 
         return [{gen_id: gen_job}, {self.node_id: trigger_job}]
 
@@ -196,5 +208,8 @@ class DAG:
         """Writes the rendered dict to a file."""
         with open(filepath, "w", encoding="utf-8") as f:
             yaml.dump(
-                self.render_gitlab(**boilerplate), f, sort_keys=False, default_flow_style=False
+                self.render_gitlab(**boilerplate),
+                f,
+                sort_keys=False,
+                default_flow_style=False,
             )

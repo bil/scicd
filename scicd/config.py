@@ -1,3 +1,4 @@
+import pprint
 from typing import Optional, List, Dict, Any
 from copy import deepcopy
 from collections.abc import Mapping
@@ -44,6 +45,7 @@ class TaskConfig:
 
     # CI/CD governance
     image: str = "python:3.10-slim"
+    python_executable: str = "python"
     tags: List[str] = field(default_factory=list)
     variables: Dict[str, str] = field(default_factory=dict)
     retries: int = 0
@@ -84,6 +86,10 @@ class SciCDConfig:
 
             self.__class__._initialized = True
 
+    def __repr__(self) -> str:
+        """Provides a pretty-printed dictionary representation for the CLI."""
+        return pprint.pformat(self._base_state, indent=2, sort_dicts=False)
+
     def _load_toml_state(self):
         """Loads pyproject.toml into the base state."""
         toml_path = Path("pyproject.toml")
@@ -106,11 +112,11 @@ class SciCDConfig:
 
                 if len(parts) == 2:
                     family, option = parts
-                    if "tasks" not in overrides:
-                        overrides["tasks"] = {}
-                    if family not in overrides["tasks"]:
-                        overrides["tasks"][family] = {}
-                    overrides["tasks"][family][option] = val
+                    if "task" not in overrides:
+                        overrides["task"] = {}
+                    if family not in overrides["task"]:
+                        overrides["task"][family] = {}
+                    overrides["task"][family][option] = val
 
             elif key.startswith("scicd_"):
                 option = key[len("scicd_") :]
@@ -125,7 +131,7 @@ class SciCDConfig:
         Ignores any task-specific overrides.
         """
         # We only look at the base state, ignoring the 'tasks' sub-dictionary
-        param = {k: v for k, v in self._base_state.items() if k != "tasks"}
+        param = {k: v for k, v in self._base_state.items() if k != "task"}
 
         return self._build_dataclass(WorkspaceConfig, param)
 
@@ -135,7 +141,7 @@ class SciCDConfig:
         Applies task-specific overrides on top of the root defaults.
         """
         param = deepcopy(self._base_state)
-        tasks_config = param.pop("tasks", {})
+        tasks_config = param.pop("task", {})
 
         # Apply the specific family overrides
         if family and family in tasks_config:
@@ -150,3 +156,25 @@ class SciCDConfig:
         valid_keys = {f.name for f in fields(config_class)}
         filtered_config = {k: v for k, v in config_dict.items() if k in valid_keys}
         return config_class(**filtered_config)
+
+
+def get_config(family: str = None, **kwargs):
+    """
+    CLI utility to inspect the active configuration state.
+
+    Args:
+        family (str, optional): The Luigi task family to inspect. If None,
+                                returns the raw global config state.
+        **kwargs: Variadic overrides (e.g., scicd_image="ubuntu:latest").
+    """
+    cfg = SciCDConfig()
+
+    # Apply any CLI overrides first so the user sees the final state
+    if kwargs:
+        cfg.override(**kwargs)
+
+    # Return the dataclass if they asked for a specific task, else the raw singleton instance
+    if family:
+        cfg = cfg.family_config(family)
+
+    return str(cfg)
