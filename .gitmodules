@@ -1,6 +1,0 @@
-[submodule "2602_snakemake"]
-	path = 2602_snakemake
-	url = ssh+git://git@code.stanford.edu/bil/user/kenjimar/2602_snakemake.git
-[submodule "2603_luigi"]
-	path = 2603_luigi
-	url = git@code.stanford.edu:bil/user/kenjimar/2603_luigi.git
