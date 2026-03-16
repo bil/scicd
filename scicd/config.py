@@ -28,11 +28,19 @@ def deep_update(source, overrides):
 
 
 @dataclass(kw_only=True)
-class SciCDDefaults:
-    """
-    Replaces `class scicd(luigi.Config)`.
-    Defines all configuration parameters, their types, and their defaults.
-    """
+class WorkspaceConfig:
+    """Global repository settings. Never overridden by task families."""
+
+    # Gitlab
+    gitlab_project: str
+    gitlab_url: str = "https://gitlab.com"
+    gilab_workflow: Dict[str, Any] = field(default_factory=dict)
+    gitlab_default: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(kw_only=True)
+class TaskConfig:
+    """Execution settings. Defined as defaults at the root, overridable per task."""
 
     # CI/CD governance
     image: str = "python:3.10-slim"
@@ -45,8 +53,6 @@ class SciCDDefaults:
     memory_request_vars: List[str] = field(default_factory=list)
 
     # Gitlab
-    gitlab_project: str
-    gitlab_url: str = "https://gitlab.com"
     gitlab_extras: Dict[str, Any] = field(default_factory=dict)
 
     # GCP
@@ -113,21 +119,34 @@ class SciCDConfig:
         # Update global state
         self._base_state = deep_update(self._base_state, overrides)
 
-    def family_config(self, family: str) -> SciCDDefaults:
+    def workspace_config(self) -> WorkspaceConfig:
         """
-        Resolves global state for a specific family.
-        Performs Access Validation (Point 3) by returning the dataclass.
+        Returns only the global workspace settings from the root of pyproject.toml.
+        Ignores any task-specific overrides.
+        """
+        # We only look at the base state, ignoring the 'tasks' sub-dictionary
+        param = {k: v for k, v in self._base_state.items() if k != "tasks"}
+
+        return self._build_dataclass(WorkspaceConfig, param)
+
+    def family_config(self, family: str) -> TaskConfig:
+        """
+        Returns the resolved execution settings for a specific task family.
+        Applies task-specific overrides on top of the root defaults.
         """
         param = deepcopy(self._base_state)
         tasks_config = param.pop("tasks", {})
 
+        # Apply the specific family overrides
         if family and family in tasks_config:
             param = deep_update(param, tasks_config[family])
 
-        return self._build_dataclass(param)
+        return self._build_dataclass(TaskConfig, param)
 
-    def _build_dataclass(self, config_dict: dict) -> SciCDDefaults:
+    def _build_dataclass(
+        self, config_class: type[WorkspaceConfig] | type[TaskConfig], config_dict: dict
+    ) -> WorkspaceConfig | TaskConfig:
         """Helper to enforce strict dataclass schema on a dictionary."""
-        valid_keys = {f.name for f in fields(SciCDDefaults)}
+        valid_keys = {f.name for f in fields(config_class)}
         filtered_config = {k: v for k, v in config_dict.items() if k in valid_keys}
-        return SciCDDefaults(**filtered_config)
+        return config_class(**filtered_config)

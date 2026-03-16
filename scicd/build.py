@@ -126,7 +126,9 @@ def _build_dag_edges(
                         node.task_deps.append(parent_node)
 
 
-def build(module: str, family: str, yml_filepath: str = ".gitlab-ci.yml", **kwargs):
+def build_gitlab(
+    module: str, family: str, yml_filepath: str = ".gitlab-ci.yml", **kwargs
+):
     """
     Build a Luigi workflow into CI/CD
     """
@@ -141,7 +143,13 @@ def build(module: str, family: str, yml_filepath: str = ".gitlab-ci.yml", **kwar
 
     SciCDConfig().override(**scicd_kwargs)
     dag = build_dag(module, family, **task_kwargs)
-    dag.write_yaml(filepath=yml_filepath)
+
+    workspace_config = SciCDConfig().workspace_config()
+    dag.write_gitlab_yaml(
+        filepath=yml_filepath,
+        default=workspace_config["gitlab_default"],
+        workflow=workspace_config["gitlab_workflow"],
+    )
 
     print(f"✨ SciCD: DAG generated for {family} with {len(kwargs)} overrides.")
 

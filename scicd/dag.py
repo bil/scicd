@@ -1,5 +1,5 @@
 from __future__ import annotations  # Put this at the very top of your file
-
+from copy import deepcopy
 import luigi
 import json
 import re
@@ -164,10 +164,12 @@ class DAG:
     def __init__(self, nodes: List[BaseNode]):
         self.nodes = nodes
 
-    def render(self) -> dict:
+    def render_gitlab(self, **boilerplate) -> dict:
         """
         Gathers all jobs from all nodes and builds the final GitLab CI dict.
         """
+
+        pipeline = deepcopy(boilerplate)
         # Collect all stages
         # We extract the stage string from the job bodies
         all_job_definitions = []
@@ -183,14 +185,16 @@ class DAG:
         # We sort by the integer suffix to avoid 'stage_10' coming before 'stage_2'
         sorted_stages = sorted(list(unique_stages), key=lambda x: int(x.split("_")[1]))
 
-        # 2. Build the final manifest
-        pipeline = {"stages": sorted_stages}
+        # Build the final manifest
+        pipeline["stages"] = sorted_stages
         for job_dict in all_job_definitions:
             pipeline.update(job_dict)
 
         return pipeline
 
-    def write_yaml(self, filepath: str = ".gitlab-ci.yml"):
+    def write_gitlab_yaml(self, filepath: str = ".gitlab-ci.yml", **boilerplate):
         """Writes the rendered dict to a file."""
         with open(filepath, "w", encoding="utf-8") as f:
-            yaml.dump(self.render(), f, sort_keys=False, default_flow_style=False)
+            yaml.dump(
+                self.render_gitlab(**boilerplate), f, sort_keys=False, default_flow_style=False
+            )
