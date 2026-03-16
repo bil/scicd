@@ -135,12 +135,11 @@ def run_pipeline(branch: str = None, **pipeline_vars):
     formatted_vars = [
         {"key": str(k), "value": str(v)} for k, v in pipeline_vars.items()
     ]
+    if formatted_vars:
+        print(f"Injecting {formatted_vars} into pipeline")
 
     # Trigger the pipeline
     p = project.pipelines.create({"ref": branch, "variables": formatted_vars})
 
     print(f"🚀 SciCD: Pipeline {p.id} triggered on branch '{branch}'")
     print(f"🔗 View here: {p.web_url}")
-
-    if formatted_vars:
-        print(f" injected {len(formatted_vars)} pipeline variables.")

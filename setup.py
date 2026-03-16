@@ -1,23 +1,23 @@
-"""
-Setup script
-"""
-
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(
     name="scicd",
     version="0.0.1",
-    packages=["scicd"],
+    packages=find_packages(),
+    include_package_data=True,
+    install_requires=[
+        "luigi>=3.8.0",
+        "python-dotenv>=1.1.0",
+        "python-gitlab>=6.0.0",
+        "PyYAML>=6.0",
+        "pyyaml-include>=2.2",
+        "typer>=0.24.1",
+        "tomli>=2.0.1",
+    ],
     entry_points={
         "console_scripts": [
-            "scicd=scicd.cli:main",
+            "scicd=scicd.cli:app",
         ],
     },
-    requires=[
-        "python-dotenv",
-        "pyyaml",
-        "python-gitlab",
-        "luigi[toml]",
-        "typer"
-    ]
+    python_requires=">=3.10",
 )

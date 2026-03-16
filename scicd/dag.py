@@ -115,9 +115,9 @@ class SliceNode(BaseNode):
             f"{self.cfg.python_executable} -m scicd.slice generate "
             f"--module {self.tasks[0].__module__} "
             f"--family {self.family} "
-            f"--all_params_json '{params_json}' "
-            f"--cfg_json {cfg_json} "
-            f"--gitlab_info_json {gitlab_info_json}"
+            f"--all-params-json '{params_json}' "
+            f"--cfg-json '{cfg_json}' "
+            f"--gitlab-info-json '{gitlab_info_json}'"
         ]
         gen_job["artifacts"] = {"paths": ["manifest.yml", "child_pipeline.yml"]}
         if self.needs:
@@ -159,7 +159,7 @@ class BijectNode(BaseNode):
             f"{self.cfg.python_executable} -m scicd.biject run "
             f"--module {module} "
             f"--family {family} "
-            f"--params_json '{params_json}'"
+            f"--params-json '{params_json}'"
         )
 
     def to_gitlab(self) -> List[dict]:
