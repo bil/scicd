@@ -1,11 +1,23 @@
 import luigi
 import json
-import fire
+import typer
 import importlib
+from typing import Annotated
+
+# Initialize Typer
+app = typer.Typer()
 
 
-def run(module: str, family: str, params_json: str):
-    # Dynamically import the module where the task lives
+@app.command()
+def run(
+    module: Annotated[str, typer.Option(help="The Python module where the task lives")],
+    family: Annotated[str, typer.Option(help="The Luigi task class name")],
+    params_json: Annotated[str, typer.Option(help="JSON string of task parameters")],
+):
+    """
+    Executes a specific Luigi task via dynamic import.
+    """
+    # Dynamically import the module
     try:
         mod = importlib.import_module(module)
     except ImportError as e:
@@ -13,16 +25,22 @@ def run(module: str, family: str, params_json: str):
         raise e
 
     # Get the class from the module
-    task_cls = getattr(mod, family)
+    try:
+        task_cls = getattr(mod, family)
+    except AttributeError:
+        print(f"Error: Module {module} has no class named {family}")
+        raise
 
-    # Load params and instantiate
+    # Load params (Guaranteed to be a string by Typer)
     params = json.loads(params_json)
+
+    # Instantiate via Luigi's helper
     task_instance = task_cls.from_str_params(params)
 
-    # 4. Execute
-    print(f"--- Running {module}.{family} ---")
+    # Execute
+    print(f"--- Running {module}.{family} with params: {params} ---")
     luigi.build([task_instance], local_scheduler=True)
 
 
 if __name__ == "__main__":
-    fire.Fire()
+    app()

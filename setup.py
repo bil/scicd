@@ -13,4 +13,11 @@ setup(
             "scicd=scicd.cli:main",
         ],
     },
+    requires=[
+        "python-dotenv",
+        "pyyaml",
+        "python-gitlab",
+        "luigi[toml]",
+        "typer"
+    ]
 )

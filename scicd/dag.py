@@ -1,14 +1,16 @@
 from __future__ import annotations  # Put this at the very top of your file
 from copy import deepcopy
-import luigi
 import json
 import re
 from typing import List
 from dataclasses import dataclass, asdict
-import yaml
-from scicd.config import SciCDConfig
 from abc import ABC, abstractmethod
 from functools import cached_property
+
+import yaml
+import luigi
+
+from scicd.config import SciCDConfig
 import scicd.config
 
 
