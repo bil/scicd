@@ -1,7 +1,10 @@
 from __future__ import annotations
 from typing import Dict, List, Tuple
+import importlib
 
 import luigi
+from luigi.cmdline_parser import CmdlineParser
+
 from scicd.config import SciCDConfig
 from scicd.dag import DAG, BaseNode, SliceNode, BijectNode
 
@@ -81,8 +84,8 @@ def _group_tasks_into_nodes(
 
     for tid, task in all_tasks.items():
         rank = task_ranks[tid]
-        family = task.family
-        cfg = SciCDConfig(family=family)
+        family = task.task_family
+        cfg = SciCDConfig().family_config(family)
 
         if cfg.concurrency_method == "slice":
             # Group by family AND rank so tasks from the same family
@@ -123,12 +126,41 @@ def _build_dag_edges(
                         node.task_deps.append(parent_node)
 
 
-from luigi.cmdline_parser import CmdlineParser
-
-
-def build(module: str, family: str, **kwargs):
+def build(module: str, family: str, yml_filepath: str = ".gitlab-ci.yml", **kwargs):
     """
-    The 'Official' way to hydrate a task from SciCD.
+    Build a Luigi workflow into CI/CD
+    """
+    task_kwargs = {}
+    scicd_kwargs = {}
+
+    for key, val in kwargs.items():
+        if key.startswith("scicd"):
+            scicd_kwargs[key] = val
+        else:
+            task_kwargs[key] = str(val)
+
+    SciCDConfig().override(**scicd_kwargs)
+    dag = build_dag(module, family, **task_kwargs)
+    dag.write_yaml(filepath=yml_filepath)
+
+    print(f"✨ SciCD: DAG generated for {family} with {len(kwargs)} overrides.")
+
+
+def build_dag(module: str, family: str, **kwargs):
+    """
+    Build a Luigi task into its DAG
+    """
+
+    task = load_task(module, family, **kwargs)
+
+    # Now that we have the 'target' task fully loaded with CLI params:
+    dag = luigi2dag(task)
+    return dag
+
+
+def load_task(module: str, family: str, **kwargs):
+    """
+    Programmatically loads a task, injecting parameters from luigi.toml.
     """
     cmdline_args = ["--module", module, family]
 
@@ -137,13 +169,11 @@ def build(module: str, family: str, **kwargs):
         formatted_key = key.replace("_", "-")
         cmdline_args.extend([f"--{formatted_key}", str(val)])
 
+    # Ensure the module is imported so Luigi knows the Task exists
+    importlib.import_module(module)
+
     # This sets CmdlineParser._instance so Task constructors can find it.
     with CmdlineParser.global_instance(cmdline_args) as cp:
-        target = cp.get_task_obj()
+        task = cp.get_task_obj()
 
-    # Now that we have the 'target' task fully loaded with CLI params:
-    dag = luigi2dag(target)
-    dag.write_yaml()
-
-    print(f"✨ SciCD: DAG generated for {family} with {len(kwargs)} overrides.")
-
+    return task

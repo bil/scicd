@@ -1,9 +1,9 @@
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from copy import deepcopy
 from collections.abc import Mapping
-from pprint import pformat
-
-import luigi
+from dataclasses import dataclass, field, fields
+from pathlib import Path
+import tomli
 
 
 def deep_update(source, overrides):
@@ -27,71 +27,107 @@ def deep_update(source, overrides):
     return source
 
 
-class scicd(luigi.Config):
+@dataclass(kw_only=True)
+class SciCDDefaults:
     """
-    Standard Luigi Config to define the [scicd] section and parameter types.
+    Replaces `class scicd(luigi.Config)`.
+    Defines all configuration parameters, their types, and their defaults.
     """
 
-    # CI/CD govenance
-    image = luigi.OptionalParameter(default="python:3.10-slim")
-    tags = luigi.OptionalListParameter(default=[])
-    variables = luigi.OptionalDictParameter(default={})
-    retries = luigi.OptionalIntParameter(default=0)
-    cpu = luigi.OptionalIntParameter(default=1)
-    memory = luigi.OptionalParameter(default="8Gi")
+    # CI/CD governance
+    image: str = "python:3.10-slim"
+    tags: List[str] = field(default_factory=list)
+    variables: Dict[str, str] = field(default_factory=dict)
+    retries: int = 0
+    cpu: str = "1"
+    memory: str = "8Gi"
+    cpu_request_vars: List[str] = field(default_factory=list)
+    memory_request_vars: List[str] = field(default_factory=list)
 
     # Gitlab
-    gitlab_url = luigi.OptionalParameter(default="https://gitlab.com")
-    gitlab_project = luigi.Parameter()
-    gitlab_extras = luigi.OptionalDictParameter(default=None)
+    gitlab_project: str
+    gitlab_url: str = "https://gitlab.com"
+    gitlab_extras: Dict[str, Any] = field(default_factory=dict)
 
     # GCP
-    gcp_project = luigi.OptionalParameter(default=None)
-    gcp_pubsub_topic = luigi.OptionalParameter(default=None)
-    gcp_pubsub_subscription = luigi.OptionalParameter(default=None)
+    gcp_project: Optional[str] = None
+    gcp_pubsub_topic: Optional[str] = None
+    gcp_pubsub_subscription: Optional[str] = None
 
     # Concurrency
-    concurrency_method = luigi.OptionalParameter(default="biject")
-    concurrency_workers = luigi.OptionalIntParameter(default=1)
+    concurrency_method: str = "biject"
+    concurrency_workers: int = 1
 
 
 class SciCDConfig:
-    """
-    The Smart Wrapper. Use this in your code.
-    It doesn't inherit from luigi.Config to avoid metaclass/singleton issues.
-    """
+    """Singleton configuration manager for SciCD."""
 
-    def __init__(self, family: Optional[str] = None, **runtime_overrides):
-        self.family = family
-        self.cfg = scicd(**runtime_overrides)
-        self.types_dict = dict(scicd.get_params())
-        self._cfg = luigi.configuration.get_config()
+    _instance = None
+    _initialized = False  # Class-level flag to protect __init__
 
-    def __getattr__(self, name):
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
 
-        val = getattr(self.cfg, name)
-        if self.family is None:
-            return val
+    def __init__(self):
+        if not self._initialized:
+            self._base_state: dict = {}
 
-        task_cfg = self._cfg.get("scicd", self.family, {})
+            self._load_toml_state()
 
-        if name in task_cfg:
-            # Parse the raw TOML string into the correct type
-            task_val = self.types_dict[name].parse(task_cfg[name])
-            # If it's a dict, deep merge
-            if isinstance(val, Mapping):
-                # Convert FrozenOrderedDict to regular dict for merging
-                val = deep_update(dict(val), task_val)
-            else:
-                val = task_val
+            self.__class__._initialized = True
 
-        return val
+    def _load_toml_state(self):
+        """Loads pyproject.toml into the base state."""
+        toml_path = Path("pyproject.toml")
+        if toml_path.exists():
+            with open(toml_path, "rb") as f:
+                pyproject_data = tomli.load(f)
+                self._base_state = pyproject_data.get("tool", {}).get("scicd", {})
 
-    def to_dict(self) -> dict:
-        """Resolves all parameters into a single dictionary."""
-        return {name: getattr(self, name) for name in self.types_dict}
+    def override(self, **kwargs):
+        """
+        Takes variadic kwargs, parses them into a nested dictionary,
+        """
+        overrides = {}
 
-    def __repr__(self):
-        header = f"<{self.__class__.__name__}(family={self.family})>"
-        body = pformat(self.to_dict(), indent=2, width=80)
-        return f"{header}\n{body}"
+        for key, val in kwargs.items():
+            if key.startswith("scicd_tasks_"):
+                # E.g., scicd_tasks_Task_cpu_request_vars -> "Task", "cpu_request_vars"
+                remainder = key[len("scicd_tasks_") :]
+                parts = remainder.split("_", 1)
+
+                if len(parts) == 2:
+                    family, option = parts
+                    if "tasks" not in overrides:
+                        overrides["tasks"] = {}
+                    if family not in overrides["tasks"]:
+                        overrides["tasks"][family] = {}
+                    overrides["tasks"][family][option] = val
+
+            elif key.startswith("scicd_"):
+                option = key[len("scicd_") :]
+                overrides[option] = val
+
+        # Update global state
+        self._base_state = deep_update(self._base_state, overrides)
+
+    def family_config(self, family: str) -> SciCDDefaults:
+        """
+        Resolves global state for a specific family.
+        Performs Access Validation (Point 3) by returning the dataclass.
+        """
+        param = deepcopy(self._base_state)
+        tasks_config = param.pop("tasks", {})
+
+        if family and family in tasks_config:
+            param = deep_update(param, tasks_config[family])
+
+        return self._build_dataclass(param)
+
+    def _build_dataclass(self, config_dict: dict) -> SciCDDefaults:
+        """Helper to enforce strict dataclass schema on a dictionary."""
+        valid_keys = {f.name for f in fields(SciCDDefaults)}
+        filtered_config = {k: v for k, v in config_dict.items() if k in valid_keys}
+        return SciCDDefaults(**filtered_config)
