@@ -34,7 +34,7 @@ class WorkspaceConfig:
     # Gitlab
     gitlab_project: str
     gitlab_url: str = "https://gitlab.com"
-    gilab_workflow: Dict[str, Any] = field(default_factory=dict)
+    gitlab_workflow: Dict[str, Any] = field(default_factory=dict)
     gitlab_default: Dict[str, Any] = field(default_factory=dict)
 
 

@@ -147,8 +147,8 @@ def build_gitlab(
     workspace_config = SciCDConfig().workspace_config()
     dag.write_gitlab_yaml(
         filepath=yml_filepath,
-        default=workspace_config["gitlab_default"],
-        workflow=workspace_config["gitlab_workflow"],
+        default=workspace_config.gitlab_default,
+        workflow=workspace_config.gitlab_workflow,
     )
 
     print(f"✨ SciCD: DAG generated for {family} with {len(kwargs)} overrides.")

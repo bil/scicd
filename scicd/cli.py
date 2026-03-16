@@ -7,7 +7,7 @@ import sys
 
 import fire
 import scicd.build
-
+import scicd.gitlab
 
 def main():
     """
@@ -15,7 +15,13 @@ def main():
     """
     # Ensure current project directory is in path for loading user modules
     sys.path.insert(0, os.getcwd())
-    fire.Fire({"build_gitlab": scicd.build.build_gitlab})
+    fire.Fire(
+        {
+            "build_gitlab": scicd.build.build_gitlab,
+            "run_gitlab_pipeline": scicd.gitlab.run_pipeline,
+            "lint_gitlab": scicd.gitlab.lint_pipeline,
+        }
+    )
 
 
 if __name__ == "__main__":
