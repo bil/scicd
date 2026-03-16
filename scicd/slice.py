@@ -1,7 +1,6 @@
 import importlib
 import os
 import json
-from typing import Dict, Any
 
 import luigi
 import yaml
@@ -20,10 +19,10 @@ def generate_child_pipeline_config(
     Uses GitLab Parallel Matrix syntax.
     """
 
-    # 1. Start with the perfectly pre-compiled boilerplate (image, tags, vars, retries)
+    # Start with pre-compiled boilerplate (image, tags, vars, retries)
     worker_job = gitlab_info.copy()
 
-    # 2. Add the worker-specific execution logic
+    # Add the worker-specific execution logic
     worker_job["stage"] = "execute"
     worker_job["parallel"] = cfg.concurrency_workers
     worker_job["script"] = [

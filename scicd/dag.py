@@ -154,7 +154,7 @@ class BijectNode(BaseNode):
         params_json = json.dumps(task.to_str_params(only_significant=True))
 
         return (
-            f"python -m scicd.biject run "
+            f"{self.cfg.python_executable} -m scicd.biject run "
             f"--module {module} "
             f"--family {family} "
             f"--params_json '{params_json}'"
