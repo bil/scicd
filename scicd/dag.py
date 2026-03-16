@@ -130,6 +130,7 @@ class SliceNode(BaseNode):
             "trigger": {
                 "include": [{"artifact": "child_pipeline.yml", "job": gen_id}],
                 "strategy": "depend",
+                "forward": {"pipeline_variables": True},
             },
             "needs": [gen_id],
         }
