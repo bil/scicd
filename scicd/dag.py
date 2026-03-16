@@ -128,7 +128,10 @@ class SliceNode(BaseNode):
         trigger_job = {
             "stage": f"stage_{self.rank}",
             "trigger": {
-                "include": [{"artifact": "child_pipeline.yml", "job": gen_id}],
+                "include": [
+                    {"artifact": "child_pipeline.yml", "job": gen_id},
+                    {"artifact": "manifest.yml", "job": gen_id},
+                ],
                 "strategy": "depend",
                 "forward": {"pipeline_variables": True},
             },
