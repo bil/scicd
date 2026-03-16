@@ -42,5 +42,10 @@ def run(
     luigi.build([task_instance], local_scheduler=True)
 
 
+@app.command(hidden=True)
+def placeholder():
+    """This ensures Typer never 'collapses' the CLI structure."""
+
+
 if __name__ == "__main__":
     app()
