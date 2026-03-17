@@ -26,6 +26,7 @@ class WorkspaceConfig:
     path_download: str = "download"
     path_remote: Optional[str] = None
     path_parameters: Optional[str] = None
+    path_namespace: Optional[str] = None
     rclone_flags: List[str] = field(default_factory=lambda: ["-P", "--transfers", "4"])
 
     def __post_init__(self):
@@ -34,6 +35,23 @@ class WorkspaceConfig:
             if f.name.startswith("path"):
                 val = getattr(self, f.name)
                 setattr(self, f.name, os.path.expandvars(val))
+
+    def __getattribute__(self, name: str) -> Any:
+        """
+        Intercepts path access to append the namespace.
+        """
+        # Use super() to avoid infinite recursion
+        val = super().__getattribute__(name)
+
+        # Only apply joining logic to 'path_' fields (but not the namespace itself!)
+        if name in ("path_output", "path_remote", "path_download") and isinstance(
+            val, str
+        ):
+            namespace = super().__getattribute__("path_namespace")
+            if namespace is not None:
+                return str(Path(val) / namespace)
+
+        return val
 
 
 @dataclass(kw_only=True)
