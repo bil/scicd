@@ -61,9 +61,6 @@ class Autotask(luigi.Task):
     def complete(self) -> bool:
         """Modified completion that checks file existence and fingerprint hash"""
         wspace = self.workspace
-        if not super().complete():
-            return False
-
         outputs = luigi.task.flatten(self.output())
 
         current_fp = self.get_fingerprint()
@@ -91,9 +88,7 @@ class Autotask(luigi.Task):
         # Optional remote check
         # If enabled, try to pull the missing pieces
         if wspace.remote_completion_enabled and wspace.path_remote:
-            print("PULLING!!!")
             if scicd.remote.pull(*missing_locally):
-                print("PULLED!!!")
                 for ot in outputs:
                     p = Path(ot.path)
                     f_p = p.parent / ".luigi_fingerprints" / f"{p.name}.fingerprint"
