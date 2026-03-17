@@ -1,81 +1,127 @@
 """
-CLI interface for scicd using Typer.
+CLI interface for scicd using Cyclopts.
 """
 
 import os
 import sys
-from typing import Optional, Annotated, List
+from typing import Annotated, Dict, Optional
 
-import typer
-from typer import Option, Argument
+from cyclopts import App, Parameter
 
 import scicd.build
 import scicd.gitlab
 import scicd.config
 
-app = typer.Typer(help="CLI interface for scicd.", add_completion=False)
+# App initialization with clear metadata
+app = App(
+    name="scicd", help="Scientific CI/CD: Orchestrate Luigi DAGs on GitLab pipelines."
+)
 
-# Ensure current project directory is in path
+# Ensure current project directory is in path for module discovery
 sys.path.insert(0, os.getcwd())
-
-
-def _parse_kv_list(kv_list: Optional[List[str]]) -> dict:
-    """Helper to convert ['KEY=VAL', '--FLAG=VAL'] into {'KEY': 'VAL', 'FLAG': 'VAL'}"""
-    if not kv_list:
-        return {}
-    return {
-        item.lstrip("-").split("=", 1)[0]: item.split("=", 1)[1]
-        for item in kv_list
-        if "=" in item
-    }
 
 
 @app.command()
 def build_gitlab(
-    module: Annotated[str, Option(help="The Python module containing the DAG.")],
-    family: Annotated[str, Option(help="The base Luigi task family.")],
+    module: Annotated[
+        str,
+        Parameter(
+            help="The Python module containing the Task target.", group="Required"
+        ),
+    ],
+    family: Annotated[str, Parameter(help="The Luigi Task family.", group="Required")],
     yml_filepath: Annotated[
-        str, Option(help="Output path for the YAML.")
+        str, Parameter(help="Output path for the YAML generated file.")
     ] = ".gitlab-ci.yml",
+    **overrides: Annotated[
+        Dict[str, str],
+        Parameter(
+            help="Dynamic overrides for Luigi params, SciCD config, or GitLab boilerplate (e.g., --cpu 4 --project $CI_PROJECT_PATH)",
+            group="Overrides",
+        ),
+    ],
 ):
-    """Compiles the Luigi DAG into a GitLab CI/CD YAML file."""
-    scicd.build.build_gitlab(module=module, family=family, yml_filepath=yml_filepath)
+    """
+    Compiles a Luigi DAG into a valid .gitlab-ci.yml file.
+
+    This command resolves dependencies, calculates ranks, and maps tasks to GitLab stages.
+    Any extra flags are passed as top-level boilerplate to the CI configuration.
+    """
+    scicd.build.build_gitlab(
+        module=module, family=family, yml_filepath=yml_filepath, **overrides
+    )
+
+
+@app.command()
+def export_dag(
+    module: Annotated[
+        str, Parameter(help="The Python module containing the DAG.", group="Required")
+    ],
+    family: Annotated[
+        str, Parameter(help="The base Luigi task family.", group="Required")
+    ],
+    filepath: Annotated[
+        str, Parameter(help="Output path for the Graphviz .dot file.")
+    ] = "dag.dot",
+    **overrides: Annotated[
+        Dict[str, str],
+        Parameter(
+            help="Config overrides used during DAG generation.", group="Overrides"
+        ),
+    ],
+):
+    """
+    Exports the task dependency graph to a DOT file for visualization.
+    Useful for verifying 'needs' logic before committing to GitLab.
+    """
+    scicd.build.export_dag(module=module, family=family, filepath=filepath, **overrides)
 
 
 @app.command()
 def lint_gitlab(
     yml_filepath: Annotated[
-        str, Option(help="Path to the YAML file to validate.")
+        str, Parameter(help="Path to the YAML file to validate.")
     ] = ".gitlab-ci.yml",
 ):
-    """Validates the generated YAML against the GitLab API."""
+    """
+    Validates the generated YAML against the GitLab Lint API.
+    Requires valid CI_SERVER_URL and PRIVATE_TOKEN environment variables.
+    """
     if not scicd.gitlab.lint_pipeline(yml_filepath=yml_filepath):
-        raise typer.Exit(code=1)
+        sys.exit(1)
 
 
 @app.command()
 def run_gitlab_pipeline(
-    branch: Annotated[str, Option(help="The branch to trigger on.")] = "main",
-    variables: Annotated[
-        Optional[List[str]], Argument(help="Extra variables (KEY=VALUE).")
-    ] = None,
+    branch: Annotated[str, Parameter(help="The branch to trigger on.")] = "main",
+    **variables: Annotated[
+        Dict[str, str],
+        Parameter(
+            help="CI/CD variables passed to the pipeline trigger.", group="Variables"
+        ),
+    ],
 ):
-    """Usage: scicd run-gitlab-pipeline --branch main RUNNER=worm ENV=prod"""
-    vars_dict = _parse_kv_list(variables)
-    scicd.gitlab.run_pipeline(branch=branch, **vars_dict)
+    """
+    Triggers a remote GitLab pipeline execution.
+    Example: scicd run-gitlab-pipeline --branch develop --RUNNER internal --DEBUG true
+    """
+    scicd.gitlab.run_pipeline(branch=branch, **variables)
 
 
 @app.command()
 def config(
-    family: Annotated[Optional[str], Option(help="Task family to inspect.")] = None,
-    overrides: Annotated[
-        Optional[List[str]], Argument(help="Config overrides (key=value).")
-    ] = None,
+    family: Annotated[Optional[str], Parameter(help="Task family to inspect.")] = None,
+    **overrides: Annotated[
+        Dict[str, str],
+        Parameter(help="Runtime overrides to apply to the config.", group="Overrides"),
+    ],
 ):
-    """Usage: scicd config --family TaskA cpu=4 memory=8Gi"""
-    kv_overrides = _parse_kv_list(overrides)
-    result = scicd.config.get_config(family=family, **kv_overrides)
-    typer.echo(result)
+    """
+    Inspects the resolved configuration for a specific task family.
+    Prints the merged result of default, workspace, and family-level configs.
+    """
+    result = scicd.config.get_config(family=family, **overrides)
+    print(result)
 
 
 if __name__ == "__main__":

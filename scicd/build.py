@@ -166,6 +166,14 @@ def build_dag(module: str, family: str, **kwargs):
     return dag
 
 
+def export_dag(module: str, family: str, filepath: str = "dag.dot", **kwargs):
+    """
+    Build a DAG that targets a Luigi task, and generate graphviz dot file.
+    """
+    dag = build_dag(module, family, **kwargs)
+    dag.export_dot(filepath)
+
+
 def load_task(module: str, family: str, **kwargs):
     """
     Programmatically loads a task, injecting parameters from luigi.toml.
@@ -173,7 +181,7 @@ def load_task(module: str, family: str, **kwargs):
     cmdline_args = ["--module", module, family]
 
     for key, val in kwargs.items():
-        # Fire gives underscores; Luigi parser expects dashes
+        # Luigi parser expects dashes
         formatted_key = key.replace("_", "-")
         cmdline_args.extend([f"--{formatted_key}", str(val)])
 

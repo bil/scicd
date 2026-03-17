@@ -11,7 +11,7 @@ setup(
         "python-gitlab>=6.0.0",
         "PyYAML>=6.0",
         "pyyaml-include>=2.2",
-        "typer>=0.24.1",
+        "cyclopts>=4.10.0",
         "tomli>=2.0.1",
     ],
     entry_points={

@@ -222,3 +222,49 @@ class DAG:
                 sort_keys=False,
                 default_flow_style=False,
             )
+
+    def export_dot(self, filepath: str = "dag.dot"):
+        """
+        Generates a Graphviz DOT file representing the job dependencies.
+        """
+        dot_lines = [
+            "digraph G {",
+            "    rankdir=LR;",
+            "    node [shape=box, style=rounded, fontname=Arial];",
+            "    edge [fontname=Arial];",
+            "",
+        ]
+
+        for node in self.nodes:
+            # 1. Define the node style based on type
+            color = "lightblue" if isinstance(node, SliceNode) else "lightgrey"
+            label = f"{node.family}\\n(Rank {node.rank})"
+            dot_lines.append(
+                f'    "{node.node_id}" [label="{label}", fillcolor={color}, style=filled];'
+            )
+
+            # 2. Define the edges
+            # SliceNodes have an internal generator job, you might want to visualize that
+            if isinstance(node, SliceNode):
+                gen_id = f"{node.family}_rank{node.rank}_gen"
+                dot_lines.append(
+                    f'    "{gen_id}" [label="{node.family}_GEN", shape=ellipse];'
+                )
+                dot_lines.append(
+                    f'    "{gen_id}" -> "{node.node_id}" [style=dashed, label="triggers"];'
+                )
+
+                # Connect dependencies to the generator (since the trigger needs the gen)
+                for dep in node.task_deps:
+                    dot_lines.append(f'    "{dep.node_id}" -> "{gen_id}";')
+            else:
+                # BijectNode standard dependencies
+                for dep in node.task_deps:
+                    dot_lines.append(f'    "{dep.node_id}" -> "{node.node_id}";')
+
+        dot_lines.append("}")
+
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write("\n".join(dot_lines))
+
+        print(f"DAG exported to {filepath}")
