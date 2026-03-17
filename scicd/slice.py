@@ -27,12 +27,14 @@ def generate_child_pipeline_config(
     worker_job["script"] = [
         f"{cfg.python_executable} -m scicd.slice slice-run --manifest-path {manifest_path}"
     ]
-    worker_job["needs"] = [{"pipeline": "$CI_PIPELINE_ID", "job": gen_id}]
-
-    return {
-        "stages": ["execute"],
-        f"{family}_worker": worker_job,
-    }
+    worker_job["needs"] = [
+        {
+            "pipeline": "$CI_PIPELINE_ID",
+            "job": gen_id,
+            "artifacts": True,
+            "project": "$CI_PROJECT_PATH",
+        }
+    ]
 
 
 @app.command()
