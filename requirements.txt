@@ -1,5 +1,8 @@
 python-dotenv
-pyyaml
 python-gitlab
+python-frontmatter
 luigi[toml]
 cyclopts
+tomli
+Jinja2
+PyYAML
