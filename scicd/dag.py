@@ -259,10 +259,10 @@ class DAG:
         for node in self.nodes:
             ranks.setdefault(node.rank, []).append(node)
 
-        for rank, nodes in sorted(ranks.items()):
+        for _, nodes in sorted(ranks.items()):
             # Optional: Force nodes of the same rank into the same vertical column
             dot_lines.append(
-                f"    {{ rank=same; " + " ".join([f'"{id(n)}"' for n in nodes]) + " }"
+                "{{rank=same; " + " ".join([f'"{id(n)}"' for n in nodes]) + " }"
             )
 
             for node in nodes:
@@ -280,5 +280,5 @@ class DAG:
 
         dot_lines.append("}")
 
-        with open(filepath, "w") as f:
+        with open(filepath, "w", encoding="utf-8") as f:
             f.write("\n".join(dot_lines))
