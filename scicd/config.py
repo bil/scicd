@@ -232,12 +232,14 @@ def cascading_config(key, **kwargs):
 
     # Nothing provided for this Task
     if key not in cfg:
+        print("No config for task")
         return {}
 
     # Override default config
+    print("Overriding!")
     cfg = cfg[key]
     config = cfg.get("config", {})
     override = cfg.get("override", [])
-
+    print(config, override)
     # Cascading logic
     return specify(config, override, **kwargs)
