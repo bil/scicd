@@ -251,6 +251,7 @@ class DAG:
             )
 
     def export_dot(self, filepath: str):
+        """Generate .dot file of DAG"""
         dot_lines = [
             "digraph G {",
             "    rankdir=LR;",
@@ -259,29 +260,43 @@ class DAG:
             "",
         ]
 
-        # Group nodes by rank to ensure they stay in vertical columns
+        # Use a deterministic sort to ensure node_0 is always the same node across runs
+        # We sort by the dot label string to ensure stable ordering in Git
+        sorted_nodes = sorted(self.nodes, key=lambda x: x.get_dot_label())
+
+        # Use the Python object's memory ID for the dictionary ONLY during this
+        # specific loop to map objects to stable strings like "node_0"
+        node_to_id = {id(node): f"node_{i}" for i, node in enumerate(sorted_nodes)}
+
         ranks = {}
         for node in self.nodes:
             ranks.setdefault(node.rank, []).append(node)
 
         for _, nodes in sorted(ranks.items()):
-            dot_lines.append(
-                "{rank=same; " + " ".join([f'"{id(n)}"' for n in nodes]) + " }"
-            )
+            # Sort within rank for deterministic {rank=same} blocks
+            current_rank_nodes = sorted(nodes, key=lambda x: x.get_dot_label())
 
-            for node in nodes:
+            node_ids = " ".join([f'"{node_to_id[id(n)]}"' for n in current_rank_nodes])
+            dot_lines.append(f"    {{rank=same; {node_ids} }}")
+
+            for node in current_rank_nodes:
                 color = "lightblue" if isinstance(node, SliceNode) else "lightgrey"
 
+                # Clean up the label to prevent DOT syntax errors
                 label = node.get_dot_label().replace('"', '\\"')
 
+                # Use the stable node_i name
+                stable_id = node_to_id[id(node)]
                 dot_lines.append(
-                    f'    "{id(node)}" [label="{label}", fillcolor={color}, style=filled];'
+                    f'    "{stable_id}" [label="{label}", fillcolor={color}, style=filled];'
                 )
 
-        # Simple node-to-node edges
+        # Edges using stable IDs
         for node in self.nodes:
+            child_id = node_to_id[id(node)]
             for parent in node.task_deps:
-                dot_lines.append(f'    "{id(parent)}" -> "{id(node)}";')
+                parent_id = node_to_id[id(parent)]
+                dot_lines.append(f'    "{parent_id}" -> "{child_id}";')
 
         dot_lines.append("}")
 
