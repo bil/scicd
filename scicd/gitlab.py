@@ -1,10 +1,39 @@
 import os
+from pathlib import Path
+
 import gitlab
 from dotenv import load_dotenv
-from scicd.config import SciCDConfig
+
+import scicd.yamler
+from scicd.config import SciCDConfig, get_family
 from scicd.git import get_branch
 
-from pathlib import Path
+
+def gitlab_info(family: str = None, cfg: scicd.config.TaskConfig = None) -> dict:
+    """
+    Load generic gitlab job keys,
+    """
+
+    if cfg is None:
+        cfg = get_family(family)
+
+    info = {
+        "image": str(cfg.image),
+        "variables": dict(cfg.variables),
+    }
+    for key in cfg.memory_request_vars:
+        info["variables"][key] = str(cfg.memory)
+    for key in cfg.cpu_request_vars:
+        info["variables"][key] = str(cfg.cpu)
+
+    if cfg.tags:
+        info["tags"] = list(cfg.tags)
+
+    if cfg.retries > 0:
+        info["retry"] = int(cfg.retries)
+
+    info = scicd.yamler.deep_update(info, dict(cfg.gitlab_extras))
+    return info
 
 
 def lint_pipeline(yml_filepath: str = ".gitlab-ci.yml") -> bool:

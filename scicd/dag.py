@@ -12,6 +12,7 @@ import luigi
 
 from scicd.config import SciCDConfig
 import scicd.yamler
+import scicd.gitlab
 
 
 def _slugify(text: str) -> str:
@@ -53,12 +54,12 @@ class BaseNode(ABC):
         """generate job dict(s)"""
 
     @cached_property
-    def cfg(self):
+    def cfg(self) -> scicd.config.TaskConfig:
         """Standardized config lookup for all nodes."""
         return SciCDConfig().family_config(self.family)
 
     @cached_property
-    def workspace_cfg(self):
+    def workspace_cfg(self) -> scicd.config.WorkspaceConfig:
         return SciCDConfig().workspace_config()
 
     @property
@@ -71,24 +72,7 @@ class BaseNode(ABC):
         return sorted(list(set(all_ids)))
 
     def gitlab_info(self) -> dict:
-
-        info = {
-            "image": str(self.cfg.image),
-            "variables": dict(self.cfg.variables),
-        }
-        for key in self.cfg.memory_request_vars:
-            info["variables"][key] = str(self.cfg.memory)
-        for key in self.cfg.cpu_request_vars:
-            info["variables"][key] = str(self.cfg.cpu)
-
-        if self.cfg.tags:
-            info["tags"] = list(self.cfg.tags)
-
-        if self.cfg.retries > 0:
-            info["retry"] = int(self.cfg.retries)
-
-        info = scicd.yamler.deep_update(info, dict(self.cfg.gitlab_extras))
-        return info
+        return scicd.gitlab.gitlab_info(cfg=self.cfg)
 
 
 @dataclass
@@ -234,11 +218,13 @@ class DAG:
 
         # Pull
         if pull_cmd:
-            all_jobs["scicd_pull_init"] = {
-                "stage": "stage_00_pull",
-                "image": cfg.family_config(None).image,
-                "script": [f"mkdir -p {wspace.path_output}", pull_cmd],
-            }
+            pull_body = scicd.gitlab.gitlab_info().extend(
+                {
+                    "stage": "stage_00_pull",
+                    "script": [f"mkdir -p {wspace.path_output}", pull_cmd],
+                }
+            )
+            all_jobs["scicd_pull_init"] = pull_body
 
         # Push: Checkpoint after each stage
         if push_cmd:
@@ -252,14 +238,16 @@ class DAG:
                     for name, body in all_jobs.items()
                     if body.get("stage") == stage_name and "scicd" not in name
                 ]
+                push_body = scicd.gitlab.gitlab_info().extend(
+                    {
+                        "stage": stage_name,
+                        "needs": deps,
+                        "script": [push_cmd],
+                        "when": "always",  # checkpoint failures too
+                    }
+                )
 
-                all_jobs[f"checkpoint_{stage_name}"] = {
-                    "stage": stage_name,
-                    "image": cfg.family_config(None).image,
-                    "needs": deps,
-                    "script": [push_cmd],
-                    "when": "always",  # checkpoint failures too
-                }
+                all_jobs[f"checkpoint_{stage_name}"] = push_body
 
         pipeline["stages"] = ["stage_00_pull"] + unique_stages
         pipeline.update(all_jobs)
