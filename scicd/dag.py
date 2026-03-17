@@ -143,9 +143,9 @@ class SliceNode(BaseNode):
         # These can have limited keys
         trigger_job = {
             "stage": f"stage_{self.rank}",
+            "variables": {"PARENT_PIPELINE_ID": "$CI_PIPELINE_ID"},
             "trigger": {
                 "include": [
-                    # Only include the file that contains "stages:", "jobs:", etc.
                     {"artifact": "child_pipeline.yml", "job": gen_id},
                 ],
                 "strategy": "depend",
