@@ -45,6 +45,10 @@ class BaseNode(ABC):
         """Unique identifier for the GitLab Job."""
 
     @abstractmethod
+    def get_dot_label(self) -> str:
+        """Return the Graphviz label string for the node."""
+
+    @abstractmethod
     def to_gitlab(self) -> List[dict]:
         """generate job dict(s)"""
 
@@ -92,6 +96,17 @@ class SliceNode(BaseNode):
     @property
     def node_id(self) -> str:
         return f"{self.family}_rank{self.rank}_trigger"
+
+    def get_dot_label(self) -> str:
+        # Slice: Family
+        # [param1=val1]
+        # [param1=val2]
+        label_lines = [self.family]
+        for task in self.tasks:
+            params = task.to_str_params(only_significant=True)
+            param_str = ", ".join([f"{k}={v}" for k, v in params.items()])
+            label_lines.append(f"[{param_str}]" if param_str else "[]")
+        return "\\n".join(label_lines)
 
     def to_gitlab(self) -> List[dict]:
         # Extract parameters from all tasks
@@ -153,6 +168,13 @@ class BijectNode(BaseNode):
         params = task.to_str_params(only_significant=True)
         params_str = "_".join([f"{k}_{v}" for k, v in params.items()])
         return _slugify(f"{self.family}_{params_str}")[:64]
+
+    def get_dot_label(self) -> str:
+        # Biject: Family (param1=val1, param2=val2)
+        task = self.tasks[0]
+        params = task.to_str_params(only_significant=True)
+        param_str = ", ".join([f"{k}={v}" for k, v in params.items()])
+        return f"{self.family}\\n({param_str})" if param_str else self.family
 
     def get_command(self) -> str:
         task = self.tasks[0]
@@ -223,48 +245,40 @@ class DAG:
                 default_flow_style=False,
             )
 
-    def export_dot(self, filepath: str = "dag.dot"):
-        """
-        Generates a Graphviz DOT file representing the job dependencies.
-        """
+    def export_dot(self, filepath: str):
         dot_lines = [
             "digraph G {",
             "    rankdir=LR;",
-            "    node [shape=box, style=rounded, fontname=Arial];",
-            "    edge [fontname=Arial];",
+            "    node [shape=box, style=rounded, fontname=Arial, fontsize=10];",
+            "    edge [fontname=Arial, fontsize=9];",
             "",
         ]
 
+        # Group nodes by rank to ensure they stay in vertical columns
+        ranks = {}
         for node in self.nodes:
-            # 1. Define the node style based on type
-            color = "lightblue" if isinstance(node, SliceNode) else "lightgrey"
-            label = f"{node.family}\\n(Rank {node.rank})"
+            ranks.setdefault(node.rank, []).append(node)
+
+        for rank, nodes in sorted(ranks.items()):
+            # Optional: Force nodes of the same rank into the same vertical column
             dot_lines.append(
-                f'    "{node.node_id}" [label="{label}", fillcolor={color}, style=filled];'
+                f"    {{ rank=same; " + " ".join([f'"{id(n)}"' for n in nodes]) + " }"
             )
 
-            # 2. Define the edges
-            # SliceNodes have an internal generator job, you might want to visualize that
-            if isinstance(node, SliceNode):
-                gen_id = f"{node.family}_rank{node.rank}_gen"
+            for node in nodes:
+                # Color logic: Slice is lightblue, Biject is lightgrey
+                color = "lightblue" if isinstance(node, SliceNode) else "lightgrey"
+                label = node.get_dot_label()
                 dot_lines.append(
-                    f'    "{gen_id}" [label="{node.family}_GEN", shape=ellipse];'
-                )
-                dot_lines.append(
-                    f'    "{gen_id}" -> "{node.node_id}" [style=dashed, label="triggers"];'
+                    f'    "{id(node)}" [label="{label}", fillcolor={color}, style=filled];'
                 )
 
-                # Connect dependencies to the generator (since the trigger needs the gen)
-                for dep in node.task_deps:
-                    dot_lines.append(f'    "{dep.node_id}" -> "{gen_id}";')
-            else:
-                # BijectNode standard dependencies
-                for dep in node.task_deps:
-                    dot_lines.append(f'    "{dep.node_id}" -> "{node.node_id}";')
+        # Simple node-to-node edges
+        for node in self.nodes:
+            for parent in node.task_deps:
+                dot_lines.append(f'    "{id(parent)}" -> "{id(node)}";')
 
         dot_lines.append("}")
 
-        with open(filepath, "w", encoding="utf-8") as f:
+        with open(filepath, "w") as f:
             f.write("\n".join(dot_lines))
-
-        print(f"DAG exported to {filepath}")
