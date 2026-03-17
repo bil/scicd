@@ -265,15 +265,15 @@ class DAG:
             ranks.setdefault(node.rank, []).append(node)
 
         for _, nodes in sorted(ranks.items()):
-            # Optional: Force nodes of the same rank into the same vertical column
             dot_lines.append(
                 "{rank=same; " + " ".join([f'"{id(n)}"' for n in nodes]) + " }"
             )
 
             for node in nodes:
-                # Color logic: Slice is lightblue, Biject is lightgrey
                 color = "lightblue" if isinstance(node, SliceNode) else "lightgrey"
-                label = node.get_dot_label()
+
+                label = node.get_dot_label().replace('"', '\\"')
+
                 dot_lines.append(
                     f'    "{id(node)}" [label="{label}", fillcolor={color}, style=filled];'
                 )
