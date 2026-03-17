@@ -33,7 +33,8 @@ class WorkspaceConfig:
         """Expand environment variables for all string fields."""
         for f in fields(self):
             if f.name.startswith("path"):
-                val = getattr(self, f.name)
+                # Avoid collision with namespace-overrided getattribute
+                val = super().__getattribute__(self, f.name)
                 setattr(self, f.name, os.path.expandvars(val))
 
     def __getattribute__(self, name: str) -> Any:
