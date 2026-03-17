@@ -124,7 +124,8 @@ class SciCDConfig:
                     task_overrides[option] = val
                 else:
                     print(
-                        f"Ignoring override for protected workspace setting: {option}"
+                        f"Ignoring override for protected workspace setting: {option}",
+                        f"Set {option} in pyproject.toml under [tool.scicd] namespace.",
                     )
 
         # Update global state with validated task overrides only
