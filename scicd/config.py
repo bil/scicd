@@ -104,27 +104,38 @@ class SciCDConfig:
         task_overrides = {}
 
         for key, val in kwargs.items():
+            if key.startswith("scicd_"):
+                # Can override with scicd namespace
+                # Or with direct key!
+                key = key[len("scicd_") :]
             # Handle specific task overrides: --scicd-tasks-MyTask-cpu="4"
-            if key.startswith("scicd_tasks_"):
-                remainder = key[len("scicd_tasks_") :]
-                parts = remainder.split("_", 1)
-                if len(parts) == 2:
+            if key.startswith("task_"):
+                remainder = key[len("task_") :]
+                parts = remainder.split("_", 1)  # Expect <Task>_<key>
+                if len(parts) == 2:  # we should
                     family, option = parts
                     # We only allow overriding fields that exist in TaskConfig
                     if option in fields(TaskConfig):
                         task_overrides.setdefault("task", {}).setdefault(family, {})[
                             option
                         ] = val
+                    else:
+                        print(
+                            f"Cannot override workspace configuration {option} for {family}!\n",
+                            f"Set {option} in pyproject.toml under [tool.scicd] namespace.",
+                        )
 
-            # Handle global task defaults: --scicd-cpu="2"
-            elif key.startswith("scicd_"):
-                option = key[len("scicd_") :]
-                # Explicitly block workspace-only keys from being overridden at CLI
+            # Handle global task defaults (e.g. cpu)
+            else:
+                option = (
+                    key  # we're not in task namespace, so we are using key directly
+                )
+                # Block workspace-only keys from being overridden at CLI
                 if option in fields(TaskConfig):
                     task_overrides[option] = val
                 else:
                     print(
-                        f"Ignoring override for protected workspace setting: {option}",
+                        f"Ignoring override for protected workspace setting: {option}\n",
                         f"Set {option} in pyproject.toml under [tool.scicd] namespace.",
                     )
 
