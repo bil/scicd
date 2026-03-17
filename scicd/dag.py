@@ -209,7 +209,7 @@ class DAG:
 
     def render_gitlab(self, **boilerplate) -> dict:
         cfg = SciCDConfig()
-        paths = cfg.paths_config()
+        wspace = cfg.workspace_config()
         pull_cmd = cfg.get_sync_command(direction="pull")
         push_cmd = cfg.get_sync_command(direction="push")
 
@@ -237,7 +237,7 @@ class DAG:
             all_jobs["scicd_pull_init"] = {
                 "stage": "stage_00_pull",
                 "image": cfg.family_config(None).image,
-                "script": [f"mkdir -p {paths.output}", pull_cmd],
+                "script": [f"mkdir -p {wspace.path_output}", pull_cmd],
             }
 
         # Push: Checkpoint after each stage

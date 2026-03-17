@@ -11,39 +11,28 @@ import tomli
 from scicd.yamler import deep_update, specify, load_yaml
 
 
-@dataclass
-class PathsConfig:
-    output: str = "output"
-    download: str = "download"
-    remote: str | None = None
-    parameters: str | None = None
-    rclone_flags: List[str] = field(default_factory=lambda: ["-P", "--transfers", "4"])
-
-    def __post_init__(self):
-        """
-        Automatically expands environment variables in all string path fields
-        immediately after instantiation.
-        """
-        # Expand simple strings
-        if self.output:
-            self.output = os.path.expandvars(self.output)
-        if self.download:
-            self.download = os.path.expandvars(self.download)
-        if self.remote:
-            self.remote = os.path.expandvars(self.remote)
-        if self.parameters:
-            self.parameters = os.path.expandvars(self.parameters)
-
-
 @dataclass(kw_only=True)
 class WorkspaceConfig:
-    """Global repository settings. Never overridden by task families."""
+    """Global environment settings. Includes GitLab, GCP, and Paths."""
 
     # Gitlab
     gitlab_project: str
     gitlab_url: str = "https://gitlab.com"
     gitlab_workflow: Dict[str, Any] = field(default_factory=dict)
-    gitlab_default: Dict[str, Any] = field(default_factory=dict)
+
+    # Paths (Naming matches TOML exactly)
+    path_output: str = "output"
+    path_download: str = "download"
+    path_remote: Optional[str] = None
+    path_parameters: Optional[str] = None
+    rclone_flags: List[str] = field(default_factory=lambda: ["-P", "--transfers", "4"])
+
+    def __post_init__(self):
+        """Expand environment variables for all string fields."""
+        for f in fields(self):
+            if f.name.startswith("path"):
+                val = getattr(self, f.name)
+                setattr(self, f.name, os.path.expandvars(val))
 
 
 @dataclass(kw_only=True)
@@ -154,26 +143,22 @@ class SciCDConfig:
 
         return self._build_dataclass(TaskConfig, param)
 
-    def paths_config(self) -> PathsConfig:
-        param = deepcopy(self._base_state.get("paths", {}))
-        return self._build_dataclass(PathsConfig, param)
-
     def get_sync_command(self, direction: str = "push") -> str:
         """
         Generates an rclone sync command.
         direction: 'pull' (remote -> local) or 'push' (local -> remote)
         """
-        p = self.paths_config()
+        wspace = self.workspace_config()
 
-        if not p.remote:
+        if not wspace.path_remote:
             return None
 
         if direction == "pull":
-            src, dest = p.remote, p.output
+            src, dest = wspace.path_remote, wspace.path_output
         else:
-            src, dest = p.output, p.remote
+            src, dest = wspace.path_output, wspace.path_remote
 
-        flags = " ".join(p.rclone_flags)
+        flags = " ".join(wspace.rclone_flags)
 
         cmd = f"rclone copy {src} {dest} {flags}"
 
@@ -181,7 +166,7 @@ class SciCDConfig:
 
     def _build_dataclass(
         self,
-        config_class: type[WorkspaceConfig] | type[TaskConfig] | type[PathsConfig],
+        config_class: type[WorkspaceConfig] | type[TaskConfig],
         config_dict: dict,
     ) -> WorkspaceConfig | TaskConfig:
         """Helper to enforce strict dataclass schema on a dictionary."""
@@ -217,7 +202,7 @@ def cascading_config(key, **kwargs):
     Parameter-dependent overwrite of insignificant Task configuration.
     These are basically "insignificant" (non-identifying) parameters.
     """
-    path = SciCDConfig().paths_config().parameters
+    path = SciCDConfig().workspace_config().path_parameters
 
     # Not using feature
     if path is None:
