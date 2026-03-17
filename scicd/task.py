@@ -1,11 +1,14 @@
 import json
 import hashlib
-import luigi
+
 from functools import cached_property
 from types import SimpleNamespace
 from pathlib import Path
 from typing import Any, Dict
 
+import luigi
+
+import scicd.remote
 from scicd.config import cascading_config, get_workspace
 from scicd.git import get_git_commit
 
@@ -55,38 +58,83 @@ class Autotask(luigi.Task):
         return hashlib.sha256(dump.encode()).hexdigest()[:12]
 
     def complete(self) -> bool:
-        """Checks both file existence and SciCD fingerprint validity."""
+        """Modified completion that checks file existence and fingerprint hash"""
+        wspace = self.workspace
         if not super().complete():
             return False
 
+        outputs = luigi.task.flatten(self.output())
+
         current_fp = self.get_fingerprint()
-        for ot in luigi.task.flatten(self.output()):
-            if hasattr(ot, "path"):
-                p = Path(ot.path)
-                fp_file = p.parent / ".luigi_fingerprints" / f"{p.name}.fingerprint"
-                if not fp_file.exists() or fp_file.read_text().strip() != current_fp:
-                    return False
-        return True
+        missing_locally = []
+
+        # Local check
+        for ot in outputs:
+            if not hasattr(ot, "path"):
+                continue
+            p = Path(ot.path)
+            fp_file = p.parent / ".luigi_fingerprints" / f"{p.name}.fingerprint"
+
+            # Check if valid fingerprint exists locally
+            if (
+                not p.exists()
+                or not fp_file.exists()
+                or fp_file.read_text().strip() != current_fp
+            ):
+                missing_locally.append(p)
+                missing_locally.append(fp_file)
+
+        if not missing_locally:
+            return True
+
+        # Optional remote check
+        # If enabled, try to pull the missing pieces
+        if wspace.remote_completion_enabled and wspace.path_remote:
+            if scicd.remote.pull(missing_locally):
+                for ot in outputs:
+                    p = Path(ot.path)
+                    f_p = p.parent / ".luigi_fingerprints" / f"{p.name}.fingerprint"
+                    if not f_p.exists() or f_p.read_text().strip() != current_fp:
+                        return False
+                return True
+
+        return False
 
 
 @Autotask.event_handler(luigi.Event.START)
 def _ensure_output_dirs(task: Autotask):
-    """
-    Automatically creates directories for all outputs,
-    but ONLY when the task is actually starting execution.
-    """
+    """Just make sure the folders exist before the task writes to them."""
     for target in luigi.task.flatten(task.output()):
         if hasattr(target, "path"):
             Path(target.path).parent.mkdir(parents=True, exist_ok=True)
 
 
 @Autotask.event_handler(luigi.Event.SUCCESS)
-def _save_fingerprints(task: Autotask):
-    """Saves the fingerprint sidecar file after a successful run."""
+def _checkpoint_task(task: Autotask):
+    """Saves fingerprints and archives outputs."""
+    wspace = task.workspace
     current_fp = task.get_fingerprint()
-    for ot in luigi.task.flatten(task.output()):
+    outputs = luigi.task.flatten(task.output())
+
+    if not outputs:
+        return
+
+    files_to_archive = []
+
+    for ot in outputs:
         if hasattr(ot, "path"):
             p = Path(ot.path)
+
+            # Local Fingerprint
             fp_dir = p.parent / ".luigi_fingerprints"
             fp_dir.mkdir(parents=True, exist_ok=True)
-            (fp_dir / f"{p.name}.fingerprint").write_text(current_fp)
+            fp_file = fp_dir / f"{p.name}.fingerprint"
+            fp_file.write_text(current_fp)
+
+            # Add to batch list
+            files_to_archive.append(p)
+            files_to_archive.append(fp_file)
+
+    # Remote Push (if configured)
+    if wspace.path_remote and files_to_archive:
+        scicd.remote.push(files_to_archive)

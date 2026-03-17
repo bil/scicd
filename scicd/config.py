@@ -27,6 +27,10 @@ class WorkspaceConfig:
     path_remote: Optional[str] = None
     path_parameters: Optional[str] = None
     path_namespace: Optional[str] = None
+
+    remote_completion_enabled: bool = False
+    remote_protocol: str = "rclone"  # ignore if path_remote is None
+    https_header: Dict[str, Any] = field(default_factory=dict)
     rclone_flags: List[str] = field(default_factory=lambda: ["-P", "--transfers", "4"])
 
     def __post_init__(self):
@@ -205,11 +209,9 @@ class SciCDConfig:
                 f"else echo 'Remote source {src} not found, starting with empty local directory.'; fi"
             )
 
-        else:
-            # Push logic remains simple: local exists if we just ran tasks.
-            src = wspace.path_output
-            dest = wspace.path_remote
-            return f"rclone copy {src} {dest} {flags}"
+        src = wspace.path_output
+        dest = wspace.path_remote
+        return f"rclone copy {src} {dest} {flags}"
 
     def _build_dataclass(
         self,
