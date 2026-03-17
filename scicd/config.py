@@ -228,3 +228,11 @@ def cascading_config(key, **kwargs):
     print(config, override)
     # Cascading logic
     return specify(config, override, **kwargs)
+
+
+def workspace(**kwargs):
+    return SciCDConfig(**kwargs).workspace_config()
+
+
+def family(family=None, **kwargs):
+    return SciCDConfig(**kwargs).family_config(family)
