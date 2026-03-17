@@ -185,24 +185,31 @@ class SciCDConfig:
 
     def get_sync_command(self, direction: str = "push") -> str:
         """
-        Generates an rclone sync command.
-        direction: 'pull' (remote -> local) or 'push' (local -> remote)
+        Generates an rclone command with a safety check for pulls.
         """
         wspace = self.workspace_config()
 
         if not wspace.path_remote:
             return None
 
-        if direction == "pull":
-            src, dest = wspace.path_remote, wspace.path_output
-        else:
-            src, dest = wspace.path_output, wspace.path_remote
-
+        # Get flags from config
         flags = " ".join(wspace.rclone_flags)
 
-        cmd = f"rclone copy {src} {dest} {flags}"
+        if direction == "pull":
+            src = wspace.path_remote
+            dest = wspace.path_output
 
-        return cmd
+            return (
+                f"if rclone lsf {src} >/dev/null 2>&1; then "
+                f"rclone copy {src} {dest} {flags}; "
+                f"else echo 'Remote source {src} not found, starting with empty local directory.'; fi"
+            )
+
+        else:
+            # Push logic remains simple: local exists if we just ran tasks.
+            src = wspace.path_output
+            dest = wspace.path_remote
+            return f"rclone copy {src} {dest} {flags}"
 
     def _build_dataclass(
         self,
