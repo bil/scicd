@@ -203,35 +203,66 @@ class BijectNode(BaseNode):
 
 
 class DAG:
+
     def __init__(self, nodes: List[BaseNode]):
         self.nodes = nodes
 
     def render_gitlab(self, **boilerplate) -> dict:
-        """
-        Gathers all jobs from all nodes and builds the final GitLab CI dict.
-        """
+        cfg = SciCDConfig()
+        paths = cfg.paths_config()
+        pull_cmd = cfg.get_sync_command(direction="pull")
+        push_cmd = cfg.get_sync_command(direction="push")
 
         pipeline = deepcopy(boilerplate)
-        # Collect all stages
-        # We extract the stage string from the job bodies
-        all_job_definitions = []
+        all_jobs = {}
+
+        # Functional Jobs: pure execution
         for node in self.nodes:
-            all_job_definitions.extend(node.to_gitlab())
+            for job_dict in node.to_gitlab():
+                for name, body in job_dict.items():
+                    # Add needs for pull
+                    existing_needs = body.get("needs", [])
+                    if pull_cmd:
+                        body["needs"] = ["scicd_pull_init"] + existing_needs
+                    all_jobs[name] = body
 
-        unique_stages = set()
-        for job_dict in all_job_definitions:
-            for job_body in job_dict.values():
-                unique_stages.add(job_body["stage"])
+        # Identify functional stages
+        unique_stages = sorted(
+            {body["stage"] for body in all_jobs.values() if "stage" in body},
+            key=lambda x: int(x.split("_")[1]) if "_" in x else 0,
+        )
 
-        # Sort stages by rank (e.g., stage_0, stage_1, stage_10)
-        # We sort by the integer suffix to avoid 'stage_10' coming before 'stage_2'
-        sorted_stages = sorted(list(unique_stages), key=lambda x: int(x.split("_")[1]))
+        # Pull
+        if pull_cmd:
+            all_jobs["scicd_pull_init"] = {
+                "stage": "stage_00_pull",
+                "image": cfg.family_config(None).image,
+                "script": [f"mkdir -p {paths.output}", pull_cmd],
+            }
 
-        # Build the final manifest
-        pipeline["stages"] = sorted_stages
-        for job_dict in all_job_definitions:
-            pipeline.update(job_dict)
+        # Push: Checkpoint after each stage
+        if push_cmd:
+            for stage_name in unique_stages:
+                if stage_name == "stage_00_pull":
+                    continue
 
+                # Wait for functional jobs in this stage
+                deps = [
+                    name
+                    for name, body in all_jobs.items()
+                    if body.get("stage") == stage_name and "scicd" not in name
+                ]
+
+                all_jobs[f"checkpoint_{stage_name}"] = {
+                    "stage": stage_name,
+                    "image": cfg.family_config(None).image,
+                    "needs": deps,
+                    "script": [push_cmd],
+                    "when": "always",  # checkpoint failures too
+                }
+
+        pipeline["stages"] = ["stage_00_pull"] + unique_stages
+        pipeline.update(all_jobs)
         return pipeline
 
     def write_gitlab_yaml(self, filepath: str = ".gitlab-ci.yml", **boilerplate):

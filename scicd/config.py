@@ -1,4 +1,7 @@
 import pprint
+import re
+import os
+
 from typing import Optional, List, Dict, Any
 from copy import deepcopy
 from collections.abc import Mapping
@@ -6,6 +9,7 @@ from dataclasses import dataclass, field, fields
 from pathlib import Path
 
 import tomli
+import yaml
 
 
 def deep_update(source, overrides):
@@ -27,6 +31,30 @@ def deep_update(source, overrides):
         else:
             source[key] = overrides[key]
     return source
+
+
+@dataclass
+class PathsConfig:
+    output: str = "output"
+    download: str = "download"
+    remote: str | None = None
+    parameters: str | None = None
+    rclone_flags: List[str] = field(default_factory=lambda: ["-P", "--transfers", "4"])
+
+    def __post_init__(self):
+        """
+        Automatically expands environment variables in all string path fields
+        immediately after instantiation.
+        """
+        # Expand simple strings
+        if self.output:
+            self.output = os.path.expandvars(self.output)
+        if self.download:
+            self.download = os.path.expandvars(self.download)
+        if self.remote:
+            self.remote = os.path.expandvars(self.remote)
+        if self.parameters:
+            self.parameters = os.path.expandvars(self.parameters)
 
 
 @dataclass(kw_only=True)
@@ -131,12 +159,10 @@ class SciCDConfig:
         Returns only the global workspace settings from the root of pyproject.toml.
         Ignores any task-specific overrides.
         """
-        # We only look at the base state, ignoring the 'tasks' sub-dictionary
-        param = {k: v for k, v in self._base_state.items() if k != "task"}
 
-        return self._build_dataclass(WorkspaceConfig, param)
+        return self._build_dataclass(WorkspaceConfig, self._base_state)
 
-    def family_config(self, family: str) -> TaskConfig:
+    def family_config(self, family: str = None) -> TaskConfig:
         """
         Returns the resolved execution settings for a specific task family.
         Applies task-specific overrides on top of the root defaults.
@@ -150,8 +176,35 @@ class SciCDConfig:
 
         return self._build_dataclass(TaskConfig, param)
 
+    def paths_config(self) -> PathsConfig:
+        param = deepcopy(self._base_state.get("paths", {}))
+        return self._build_dataclass(PathsConfig, param)
+
+    def get_sync_command(self, direction: str = "push") -> str:
+        """
+        Generates an rclone sync command.
+        direction: 'pull' (remote -> local) or 'push' (local -> remote)
+        """
+        p = self.paths_config()
+
+        if not p.remote:
+            return None
+
+        if direction == "pull":
+            src, dest = p.remote, p.output
+        else:
+            src, dest = p.output, p.remote
+
+        flags = " ".join(p.rclone_flags)
+
+        cmd = f"rclone copy {src} {dest} {flags}"
+
+        return cmd
+
     def _build_dataclass(
-        self, config_class: type[WorkspaceConfig] | type[TaskConfig], config_dict: dict
+        self,
+        config_class: type[WorkspaceConfig] | type[TaskConfig] | type[PathsConfig],
+        config_dict: dict,
     ) -> WorkspaceConfig | TaskConfig:
         """Helper to enforce strict dataclass schema on a dictionary."""
         valid_keys = {f.name for f in fields(config_class)}
@@ -179,3 +232,57 @@ def get_config(family: str = None, **kwargs):
         cfg = cfg.family_config(family)
 
     return str(cfg)
+
+
+def specify(config, override=None, **kwargs):
+    """
+    Merges base parameters with input-specific regex overrides.
+
+    Args:
+        config (dict): Base configuration dictionary.
+        override (list, optional): List of regex rules to apply.
+        **kwargs: Current task inputs used for matching.
+
+    Returns:
+        dict: Final merged parameter dictionary.
+    """
+    out = config.copy()
+    if not override:
+        return out
+    for kws in override[::-1]:  # top rule has priority
+        spec = kws["match"]
+        if all(re.match(v, str(kwargs[k])) for k, v in spec.items()):
+            out = deep_update(out, kws["config"])
+    return out
+
+
+def cascading_config(key, **kwargs):
+    """
+    Parameter-dependent overwrite of insignificant Task configuration.
+    These are basically "insignificant" (non-identifying) parameters.
+    """
+    path = SciCDConfig().paths_config().parameters
+
+    # Not using feature
+    if path is None:
+        return {}
+
+    path = Path(path)
+    if not path.exists():
+        print(f"Tried to load parameters file at {str(path)} but didn't exist!")
+        return {}
+
+    with open(path, "r", encoding="utf-8") as f:
+        cfg = yaml.safe_load(f)
+
+    # Nothing provided for this Task
+    if key not in cfg:
+        return {}
+
+    # Override default config
+    cfg = cfg[key]
+    config = cfg.get("config", {})
+    override = cfg.get("override", [])
+
+    # Cascading logic
+    return specify(config, override, **kwargs)

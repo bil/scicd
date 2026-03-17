@@ -17,7 +17,7 @@ def lint_pipeline(yml_filepath: str = ".gitlab-ci.yml") -> bool:
     Returns:
         bool: True if valid, False if invalid.
     """
-    # 1. Verify the file actually exists locally
+    # Verify the file actually exists locally
     yaml_path = Path(yml_filepath)
     if not yaml_path.exists():
         raise FileNotFoundError(
@@ -27,7 +27,7 @@ def lint_pipeline(yml_filepath: str = ".gitlab-ci.yml") -> bool:
     with open(yaml_path, "r", encoding="utf-8") as f:
         yaml_content = f.read()
 
-    # 2. Load environment and check for PAT
+    # Load environment and check for PAT
     dotenv_path = os.path.join(os.getcwd(), ".env")
     load_dotenv(dotenv_path, override=True)
 
@@ -38,7 +38,7 @@ def lint_pipeline(yml_filepath: str = ".gitlab-ci.yml") -> bool:
             "This is required to authenticate with the GitLab Lint API."
         )
 
-    # 3. Grab the global workspace config
+    # Grab the global workspace config
     config = SciCDConfig().workspace_config()
     url = config.gitlab_url
     project_path = config.gitlab_project
@@ -48,7 +48,7 @@ def lint_pipeline(yml_filepath: str = ".gitlab-ci.yml") -> bool:
             "Missing 'gitlab_project' in [tool.scicd] of pyproject.toml."
         )
 
-    # 4. Connect to GitLab and get the project context
+    # Connect to GitLab and get the project context
     client = gitlab.Gitlab(url, private_token=pat)
     try:
         project = client.projects.get(project_path)
@@ -58,21 +58,21 @@ def lint_pipeline(yml_filepath: str = ".gitlab-ci.yml") -> bool:
             f"Check 'gitlab_project' in pyproject.toml."
         ) from e
 
-    # 5. Send the content to the project-level CI Linter
-    print(f"🔍 Linting '{yml_filepath}' against {url}/{project_path}...")
+    # Send the content to the project-level CI Linter
+    print(f"Linting '{yml_filepath}' against {url}/{project_path}...")
     try:
         lint_result = project.ci_lint.create({"content": yaml_content})
     except gitlab.exceptions.GitlabCreateError as e:
         raise RuntimeError(f"GitLab API Error during linting: {e}") from e
 
-    # 6. Parse and output the results
+    # Parse and output the results
     if lint_result.valid:
-        print("✅ Pipeline YAML is valid!")
+        print("Pipeline YAML is valid!")
     else:
-        print("❌ Pipeline YAML is INVALID.\n")
+        print("Pipeline YAML is INVALID.\n")
 
     if hasattr(lint_result, "warnings") and lint_result.warnings:
-        print("⚠️ Warnings:")
+        print("Warnings:")
         for warning in lint_result.warnings:
             print(f"  - {warning}")
 
@@ -141,5 +141,5 @@ def run_pipeline(branch: str = None, **pipeline_vars):
     # Trigger the pipeline
     p = project.pipelines.create({"ref": branch, "variables": formatted_vars})
 
-    print(f"🚀 SciCD: Pipeline {p.id} triggered on branch '{branch}'")
-    print(f"🔗 View here: {p.web_url}")
+    print(f"Pipeline {p.id} triggered on branch '{branch}'")
+    print(f"View here: {p.web_url}")
