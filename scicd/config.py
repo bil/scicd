@@ -34,14 +34,6 @@ class WorkspaceConfig:
     https_header: Dict[str, Any] = field(default_factory=dict)
     rclone_flags: List[str] = field(default_factory=lambda: ["-P", "--transfers", "4"])
 
-    def __post_init__(self):
-        """Expand environment variables for all string fields."""
-        for f in fields(self):
-            if f.name.startswith("path"):
-                # Avoid collision with namespace-overrided getattribute
-                val = super().__getattribute__(f.name)
-                setattr(self, f.name, os.path.expandvars(val))
-
     def __getattribute__(self, name: str) -> Any:
         """
         Intercepts path access to append the namespace.
@@ -55,7 +47,8 @@ class WorkspaceConfig:
         ):
             namespace = super().__getattribute__("path_namespace")
             if namespace is not None:
-                return str(Path(val) / namespace)
+                val = val.rstrip("/")
+                return f"{val}/{namespace}"
 
         return val
 
@@ -99,24 +92,38 @@ class SciCDConfig:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self):
+    def __init__(self, **overrides):
         if not self._initialized:
             self.config_dict: dict = {}
-
             self._load_toml_state()
-
+            # Apply initial overrides if provided during first instantiation
+            if overrides:
+                self.override(**overrides)
             self.__class__._initialized = True
+        elif overrides:
+            # If already initialized but new overrides come in, apply them
+            self.override(**overrides)
 
     def __repr__(self) -> str:
         """Provides a pretty-printed dictionary representation for the CLI."""
         return pprint.pformat(self.config_dict, indent=2, sort_dicts=False)
+
+    def _expand_env_vars(self, data: Any) -> Any:
+        """Recursively expand environment variables in strings, lists, and dicts."""
+        if isinstance(data, dict):
+            return {k: self._expand_env_vars(v) for k, v in data.items()}
+        elif isinstance(data, list):
+            return [self._expand_env_vars(i) for i in data]
+        elif isinstance(data, str):
+            return os.path.expandvars(data)
+        return data
 
     def _load_toml_state(self):
         """Loads pyproject.toml into the base state."""
         toml_path = Path("pyproject.toml")
         if toml_path.exists():
             with open(toml_path, "rb") as f:
-                pyproject_data = tomli.load(f)
+                pyproject_data = self._expand_env_vars(tomli.load(f))
                 self.config_dict = pyproject_data.get("tool", {}).get("scicd", {})
 
     def override(self, **kwargs):
@@ -164,6 +171,7 @@ class SciCDConfig:
                     )
 
         # Update global state with validated task overrides only
+        task_overrides = self._expand_env_vars(task_overrides)
         self.config_dict = deep_update(self.config_dict, task_overrides)
 
     def workspace_config(self) -> WorkspaceConfig:
@@ -247,7 +255,6 @@ def cascading_config(family: str, **kwargs):
     cfg = cfg[family]
     config = cfg.get("config", {})
     override = cfg.get("override", [])
-    print(config, override)
     # Cascading logic
     return specify(config, override, **kwargs)
 

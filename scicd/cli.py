@@ -125,7 +125,45 @@ def config(
 
 
 @app.command()
-def task_config(
+def config_key(
+    key: Annotated[
+        str, Parameter(help="The dot-notated key to retrieve (e.g. All.samples)")
+    ],
+    **overrides: Annotated[
+        str,
+        Parameter(
+            help="Runtime overrides to apply before extraction.", group="Overrides"
+        ),
+    ],
+):
+    """
+    Extracts a specific value from the configuration using a key path.
+    Useful for shell scripts and CI/CD variables.
+    """
+    cfg = scicd.config.SciCDConfig(**overrides)
+    data = cfg.config_dict
+
+    # Traverse the dictionary using the dot-separated key
+    try:
+        parts = key.split(".")
+        for part in parts:
+            data = data[part]
+
+        # Print the raw value (or rich print if it's a complex object)
+        if isinstance(data, (dict, list)):
+            rich.print(data)
+        else:
+            print(data)
+
+    except (KeyError, TypeError):
+        rich.print(
+            f"[bold red]Error:[/bold red] Key '{key}' not found in configuration."
+        )
+        raise SystemExit(1)
+
+
+@app.command()
+def config_task(
     family: Annotated[Optional[str], Parameter(help="Task family to inspect.")] = None,
     **overrides: Annotated[
         str,
@@ -141,7 +179,7 @@ def task_config(
 
 
 @app.command()
-def workspace_config():
+def config_workspace():
     """
     Inspects the resolved configuration for a specific task family.
     Prints the merged result of default, workspace, and family-level configs.

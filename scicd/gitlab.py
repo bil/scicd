@@ -106,7 +106,7 @@ def lint_pipeline(yml_filepath: str = ".gitlab-ci.yml") -> bool:
             print(f"  - {warning}")
 
     if hasattr(lint_result, "errors") and lint_result.errors:
-        print("🚨 Errors:")
+        print("Errors:")
         for error in lint_result.errors:
             print(f"  - {error}")
 
