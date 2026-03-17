@@ -141,9 +141,10 @@ def build_gitlab(
         else:
             task_kwargs[key] = str(val)
 
-    SciCDConfig().override(**scicd_kwargs)
+    SciCDConfig().override(**scicd_kwargs) # overrides singleton
     dag = build_dag(module, family, **task_kwargs)
 
+    # this accesses overrided singleton
     workspace_config = SciCDConfig().workspace_config()
     dag.write_gitlab_yaml(
         filepath=yml_filepath,

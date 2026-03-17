@@ -1,54 +1,76 @@
 import json
 import hashlib
-from pathlib import Path
-from typing import Type, TypeVar
 import luigi
+from functools import cached_property
+from types import SimpleNamespace
+from pathlib import Path
+from typing import Any, Dict
 
-from scicd.config import cascading_config
+from scicd.config import cascading_config, get_workspace
 from scicd.git import get_git_commit
 
-T = TypeVar("T", bound=luigi.Task)
 
-
-def autotask(cls: Type[T]) -> Type[T]:
+class SciCDTask(luigi.Task):
     """
-    In-place decorator that patches the original class with SciCD logic.
+    Augmented luigi task, with cascading configuration and hash-based completion checks.
     """
-    #  Attach the Global Metadata
-    cls.COMMIT_HASH = get_git_commit()
 
-    # Add the Config Property
     @property
-    def cfg(self):
+    def path(self) -> str:
+        """
+        The task-specific subpath.
+        This is a suffix on the workspace path_output configuration.
+        Override this in child classes.
+        """
+        return ""
+
+    @cached_property
+    def output_path(self) -> Path:
+        """The base directory for this task's outputs."""
+        return Path(self.workspace.path_output) / self.path
+
+    @cached_property
+    def workspace(self):
+        """Global workspace configuration (paths, gitlab settings)."""
+        return get_workspace()
+
+    @cached_property
+    def cfg_dict(self) -> Dict[str, Any]:
+        """Raw dictionary of 'insignificant' parameters from YAML/TOML."""
         return cascading_config(self.get_task_family(), **self.param_kwargs)
 
-    cls.cfg = cfg
+    @cached_property
+    def cfg(self) -> Any:
+        """Dot-access wrapper for configuration: self.cfg.savgol_window"""
+        return SimpleNamespace(**self.cfg_dict)
 
-    # Add Fingerprinting Logic
+    @luigi.Task.event_handler(luigi.Event.START)
+    def _ensure_output_dirs(self):
+        """
+        Automatically creates directories for all outputs,
+        but ONLY when the task is actually starting execution.
+        """
+        for target in luigi.task.flatten(self.output()):
+            if hasattr(target, "path"):
+                Path(target.path).parent.mkdir(parents=True, exist_ok=True)
+
     def get_fingerprint(self) -> str:
-        fingerprint_data = {
-            "commit": self.COMMIT_HASH,
+        """Unique hash of code version, significant params, and config."""
+        data = {
+            "commit": get_git_commit(),
             "params": self.param_kwargs,
-            "config": self.cfg,
+            "config": self.cfg_dict,
         }
-        dump = json.dumps(fingerprint_data, sort_keys=True)
+        dump = json.dumps(data, sort_keys=True)
         return hashlib.sha256(dump.encode()).hexdigest()[:12]
 
-    cls.get_fingerprint = get_fingerprint
-
-    # Override Complete (preserving original check)
-    orig_complete = cls.complete
-
     def complete(self) -> bool:
-        if not orig_complete(self):
+        """Checks both file existence and SciCD fingerprint validity."""
+        if not super().complete():
             return False
 
-        outputs = luigi.task.flatten(self.output())
-        if not outputs:
-            return True
-
         current_fp = self.get_fingerprint()
-        for ot in outputs:
+        for ot in luigi.task.flatten(self.output()):
             if hasattr(ot, "path"):
                 p = Path(ot.path)
                 fp_file = p.parent / ".luigi_fingerprints" / f"{p.name}.fingerprint"
@@ -56,28 +78,13 @@ def autotask(cls: Type[T]) -> Type[T]:
                     return False
         return True
 
-    cls.complete = complete
-
-    # Override Run (to handle directory creation)
-    orig_run = cls.run
-
-    def run(self):
-        for target in luigi.task.flatten(self.output()):
-            if hasattr(target, "makedirs"):
-                target.makedirs()
-        return orig_run(self)
-
-    cls.run = run
-
-    # Success Callback for saving fingerprints
-    @cls.event_handler(luigi.Event.SUCCESS)
-    def save_fingerprint_callback(task_instance):
-        current_fp = task_instance.get_fingerprint()
-        for ot in luigi.task.flatten(task_instance.output()):
+    @luigi.Task.event_handler(luigi.Event.SUCCESS)
+    def _save_fingerprints(self):
+        """Saves the fingerprint sidecar file after a successful run."""
+        current_fp = self.get_fingerprint()
+        for ot in luigi.task.flatten(self.output()):
             if hasattr(ot, "path"):
                 p = Path(ot.path)
                 fp_dir = p.parent / ".luigi_fingerprints"
                 fp_dir.mkdir(parents=True, exist_ok=True)
                 (fp_dir / f"{p.name}.fingerprint").write_text(current_fp)
-
-    return cls

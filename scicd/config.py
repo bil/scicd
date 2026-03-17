@@ -19,6 +19,7 @@ class WorkspaceConfig:
     gitlab_project: str
     gitlab_url: str = "https://gitlab.com"
     gitlab_workflow: Dict[str, Any] = field(default_factory=dict)
+    gitlab_default: Dict[str, Any] = field(default_factory=dict)
 
     # Paths (Naming matches TOML exactly)
     path_output: str = "output"
@@ -96,30 +97,38 @@ class SciCDConfig:
 
     def override(self, **kwargs):
         """
-        Takes variadic kwargs, parses them into a nested dictionary,
+        Only permits overrides for TaskConfig settings.
+        Workspace settings (paths, GitLab URLs) are protected to ensure
+        consistency between local DAG generation and CI/CD execution.
         """
-        overrides = {}
+        task_overrides = {}
 
         for key, val in kwargs.items():
+            # Handle specific task overrides: --scicd-tasks-MyTask-cpu="4"
             if key.startswith("scicd_tasks_"):
-                # E.g., scicd_tasks_Task_cpu_request_vars -> "Task", "cpu_request_vars"
                 remainder = key[len("scicd_tasks_") :]
                 parts = remainder.split("_", 1)
-
                 if len(parts) == 2:
                     family, option = parts
-                    if "task" not in overrides:
-                        overrides["task"] = {}
-                    if family not in overrides["task"]:
-                        overrides["task"][family] = {}
-                    overrides["task"][family][option] = val
+                    # We only allow overriding fields that exist in TaskConfig
+                    if option in fields(TaskConfig):
+                        task_overrides.setdefault("task", {}).setdefault(family, {})[
+                            option
+                        ] = val
 
+            # Handle global task defaults: --scicd-cpu="2"
             elif key.startswith("scicd_"):
                 option = key[len("scicd_") :]
-                overrides[option] = val
+                # Explicitly block workspace-only keys from being overridden at CLI
+                if option in fields(TaskConfig):
+                    task_overrides[option] = val
+                else:
+                    print(
+                        f"Ignoring override for protected workspace setting: {option}"
+                    )
 
-        # Update global state
-        self._base_state = deep_update(self._base_state, overrides)
+        # Update global state with validated task overrides only
+        self._base_state = deep_update(self._base_state, task_overrides)
 
     def workspace_config(self) -> WorkspaceConfig:
         """
