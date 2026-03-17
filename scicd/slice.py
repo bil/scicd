@@ -27,8 +27,7 @@ def generate_child_pipeline_config(
         {
             "pipeline": "$CI_PIPELINE_ID",
             "job": gen_id,
-            "artifacts": True,
-            "project": "$CI_PROJECT_PATH",
+            "artifacts": True
         }
     ]
 
