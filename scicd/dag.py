@@ -178,7 +178,6 @@ class BijectNode(BaseNode):
 
     def get_command(self) -> str:
         task = self.tasks[0]
-        # Example: 'my_lab.analysis.ProcessData'
         module = task.__module__
         family = task.task_family
 
