@@ -155,11 +155,11 @@ def config_key(
         else:
             print(data)
 
-    except (KeyError, TypeError):
+    except (KeyError, TypeError) as e:
         rich.print(
             f"[bold red]Error:[/bold red] Key '{key}' not found in configuration."
         )
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
 
 @app.command()

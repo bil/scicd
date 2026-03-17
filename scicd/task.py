@@ -96,6 +96,10 @@ class Autotask(luigi.Task):
                     f_p = p.parent / ".luigi_fingerprints" / f"{p.name}.fingerprint"
                     if not f_p.exists() or f_p.read_text().strip() != current_fp:
                         return False
+                print(
+                    f"Pulled {missing_locally} from {wspace.path_remote}",
+                    f"to confirm {self.task_family} completion",
+                )
                 return True
 
         return False
@@ -137,4 +141,7 @@ def _checkpoint_task(task: Autotask):
 
     # Remote Push (if configured)
     if wspace.remote_push_enabled and wspace.path_remote and files_to_archive:
+        print(
+            f"Pushing {files_to_archive} to {wspace.path_remote} after {task.task_family} completion."
+        )
         scicd.remote.push(*files_to_archive)
