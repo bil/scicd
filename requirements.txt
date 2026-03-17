@@ -2,4 +2,4 @@ python-dotenv
 pyyaml
 python-gitlab
 luigi[toml]
-typer
+cyclopts
