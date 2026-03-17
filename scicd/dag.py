@@ -117,7 +117,7 @@ class SliceNode(BaseNode):
             f"--family {self.family} "
             f"--all-params-json '{params_json}' "
             f"--cfg-json '{cfg_json}' "
-            f"--gitlab-info-json '{gitlab_info_json}'"
+            f"--gitlab-info-json '{gitlab_info_json}' "
             f"--gen-id '{gen_id}'"
         ]
         gen_job["artifacts"] = {"paths": ["manifest.yml", "child_pipeline.yml"]}
