@@ -10,7 +10,7 @@ from scicd.config import cascading_config, get_workspace
 from scicd.git import get_git_commit
 
 
-class SciCDTask(luigi.Task):
+class Autotask(luigi.Task):
     """
     Augmented luigi task, with cascading configuration and hash-based completion checks.
     """
