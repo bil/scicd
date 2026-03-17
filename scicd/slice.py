@@ -36,6 +36,11 @@ def generate_child_pipeline_config(
         }
     ]
 
+    return {
+        "stages": ["execute"],
+        f"{family}_worker": worker_job,
+    }
+
 
 @app.command()
 def generate(
