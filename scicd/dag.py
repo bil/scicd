@@ -118,6 +118,7 @@ class SliceNode(BaseNode):
             f"--all-params-json '{params_json}' "
             f"--cfg-json '{cfg_json}' "
             f"--gitlab-info-json '{gitlab_info_json}'"
+            f"--gen-id '{gen_id}"
         ]
         gen_job["artifacts"] = {"paths": ["manifest.yml", "child_pipeline.yml"]}
         if self.needs:
@@ -135,7 +136,7 @@ class SliceNode(BaseNode):
                 "strategy": "depend",
                 "forward": {
                     "pipeline_variables": True,
-                    "yaml_variables": True,  # Ensure variables carry over
+                    "yaml_variables": True,
                 },
             },
             "needs": [gen_id],

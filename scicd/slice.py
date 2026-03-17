@@ -14,7 +14,7 @@ app = typer.Typer(help="Slicing and child-pipeline generation utilities.")
 
 
 def generate_child_pipeline_config(
-    family: str, manifest_path: str, cfg: TaskConfig, gitlab_info: dict
+    family: str, manifest_path: str, cfg: TaskConfig, gitlab_info: dict, gen_id: str
 ) -> dict:
     """
     Generates the .yml dict for the child pipeline.
@@ -27,6 +27,7 @@ def generate_child_pipeline_config(
     worker_job["script"] = [
         f"{cfg.python_executable} -m scicd.slice slice-run --manifest-path {manifest_path}"
     ]
+    worker_job["needs"] = [{"pipeline": "$CI_PIPELINE_ID", "job": gen_id}]
 
     return {
         "stages": ["execute"],
@@ -49,6 +50,7 @@ def generate(
     gitlab_info_json: Annotated[
         str, typer.Option(help="JSON string of compiled GitLab info.")
     ],
+    gen_id: Annotated[str, typer.Option(help="Trigger job identifier.")],
 ):
     """
     Creates a manifest where every entry explicitly defines its module and family.
@@ -72,7 +74,11 @@ def generate(
 
     # Generate the CI config (the child pipeline)
     pipeline_config = generate_child_pipeline_config(
-        family=family, manifest_path="manifest.yml", cfg=cfg, gitlab_info=gitlab_info
+        family=family,
+        manifest_path="manifest.yml",
+        cfg=cfg,
+        gitlab_info=gitlab_info,
+        gen_id=gen_id,
     )
 
     with open("child_pipeline.yml", "w", encoding="utf-8") as f:
