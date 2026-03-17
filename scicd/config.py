@@ -203,14 +203,13 @@ def cascading_config(key, **kwargs):
     These are basically "insignificant" (non-identifying) parameters.
     """
     path = SciCDConfig().workspace_config().path_parameters
-    path = yml_suffix(path) # if a suffix wasn't provided, tries to infer!
+    path = yml_suffix(path)  # if a suffix wasn't provided, tries to infer!
 
     # Not using feature
     if path is None:
         return {}
 
-    path = Path(path)
-    if not path.exists():
+    if not Path(path).exists():
         print(f"Tried to load parameters file at {str(path)} but didn't exist!")
         return {}
 
