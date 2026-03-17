@@ -44,7 +44,7 @@ class Autotask(luigi.Task):
         """Dot-access wrapper for configuration: self.cfg.savgol_window"""
         return SimpleNamespace(**self.cfg_dict)
 
-    @luigi.Task.event_handler(luigi.Event.START)
+    @Autotask.event_handler(luigi.Event.START)
     def _ensure_output_dirs(self):
         """
         Automatically creates directories for all outputs,
@@ -78,7 +78,7 @@ class Autotask(luigi.Task):
                     return False
         return True
 
-    @luigi.Task.event_handler(luigi.Event.SUCCESS)
+    @Autotask.event_handler(luigi.Event.SUCCESS)
     def _save_fingerprints(self):
         """Saves the fingerprint sidecar file after a successful run."""
         current_fp = self.get_fingerprint()
