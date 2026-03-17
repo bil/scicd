@@ -23,11 +23,11 @@ def generate_child_pipeline_config(
     worker_job["script"] = [
         f"{cfg.python_executable} -m scicd.slice slice-run --manifest-path {manifest_path}"
     ]
+    # https://gitlab.com/gitlab-org/gitlab/-/work_items/213457
     worker_job["needs"] = [
         {
-            "pipeline": "parent",
+            "pipeline": "$PARENT_PIPELINE_ID",
             "job": gen_id,
-            "artifacts": True
         }
     ]
 
