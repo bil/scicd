@@ -262,7 +262,7 @@ class DAG:
         for _, nodes in sorted(ranks.items()):
             # Optional: Force nodes of the same rank into the same vertical column
             dot_lines.append(
-                "{{rank=same; " + " ".join([f'"{id(n)}"' for n in nodes]) + " }"
+                "{rank=same; " + " ".join([f'"{id(n)}"' for n in nodes]) + " }"
             )
 
             for node in nodes:
