@@ -44,16 +44,6 @@ class Autotask(luigi.Task):
         """Dot-access wrapper for configuration: self.cfg.savgol_window"""
         return SimpleNamespace(**self.cfg_dict)
 
-    @Autotask.event_handler(luigi.Event.START)
-    def _ensure_output_dirs(self):
-        """
-        Automatically creates directories for all outputs,
-        but ONLY when the task is actually starting execution.
-        """
-        for target in luigi.task.flatten(self.output()):
-            if hasattr(target, "path"):
-                Path(target.path).parent.mkdir(parents=True, exist_ok=True)
-
     def get_fingerprint(self) -> str:
         """Unique hash of code version, significant params, and config."""
         data = {
@@ -78,13 +68,25 @@ class Autotask(luigi.Task):
                     return False
         return True
 
-    @Autotask.event_handler(luigi.Event.SUCCESS)
-    def _save_fingerprints(self):
-        """Saves the fingerprint sidecar file after a successful run."""
-        current_fp = self.get_fingerprint()
-        for ot in luigi.task.flatten(self.output()):
-            if hasattr(ot, "path"):
-                p = Path(ot.path)
-                fp_dir = p.parent / ".luigi_fingerprints"
-                fp_dir.mkdir(parents=True, exist_ok=True)
-                (fp_dir / f"{p.name}.fingerprint").write_text(current_fp)
+
+@Autotask.event_handler(luigi.Event.START)
+def _ensure_output_dirs(task: Autotask):
+    """
+    Automatically creates directories for all outputs,
+    but ONLY when the task is actually starting execution.
+    """
+    for target in luigi.task.flatten(task.output()):
+        if hasattr(target, "path"):
+            Path(target.path).parent.mkdir(parents=True, exist_ok=True)
+
+
+@Autotask.event_handler(luigi.Event.SUCCESS)
+def _save_fingerprints(task: Autotask):
+    """Saves the fingerprint sidecar file after a successful run."""
+    current_fp = task.get_fingerprint()
+    for ot in luigi.task.flatten(task.output()):
+        if hasattr(ot, "path"):
+            p = Path(ot.path)
+            fp_dir = p.parent / ".luigi_fingerprints"
+            fp_dir.mkdir(parents=True, exist_ok=True)
+            (fp_dir / f"{p.name}.fingerprint").write_text(current_fp)
