@@ -34,7 +34,7 @@ class WorkspaceConfig:
         for f in fields(self):
             if f.name.startswith("path"):
                 # Avoid collision with namespace-overrided getattribute
-                val = super().__getattribute__(self, f.name)
+                val = super().__getattribute__(f.name)
                 setattr(self, f.name, os.path.expandvars(val))
 
     def __getattribute__(self, name: str) -> Any:
