@@ -136,5 +136,5 @@ def _checkpoint_task(task: Autotask):
             files_to_archive.append(fp_file)
 
     # Remote Push (if configured)
-    if wspace.path_remote and files_to_archive:
+    if wspace.remote_push_enabled and wspace.path_remote and files_to_archive:
         scicd.remote.push(*files_to_archive)

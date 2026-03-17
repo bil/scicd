@@ -29,6 +29,7 @@ class WorkspaceConfig:
     path_namespace: Optional[str] = None
 
     remote_completion_enabled: bool = False
+    remote_push_enabled: bool = False
     remote_protocol: str = "rclone"  # ignore if path_remote is None
     https_header: Dict[str, Any] = field(default_factory=dict)
     rclone_flags: List[str] = field(default_factory=lambda: ["-P", "--transfers", "4"])
