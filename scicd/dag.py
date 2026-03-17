@@ -129,15 +129,17 @@ class SliceNode(BaseNode):
             "stage": f"stage_{self.rank}",
             "trigger": {
                 "include": [
+                    # Only include the file that contains "stages:", "jobs:", etc.
                     {"artifact": "child_pipeline.yml", "job": gen_id},
-                    {"artifact": "manifest.yml", "job": gen_id},
                 ],
                 "strategy": "depend",
-                "forward": {"pipeline_variables": True},
+                "forward": {
+                    "pipeline_variables": True,
+                    "yaml_variables": True,  # Ensure variables carry over
+                },
             },
             "needs": [gen_id],
         }
-        trigger_job["needs"] = [gen_id]
 
         return [{gen_id: gen_job}, {self.node_id: trigger_job}]
 
