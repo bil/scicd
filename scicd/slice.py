@@ -25,7 +25,7 @@ def generate_child_pipeline_config(
     ]
     worker_job["needs"] = [
         {
-            "pipeline": "$CI_PIPELINE_ID",
+            "pipeline": "$UPSTREAM_PIPELINE_ID",
             "job": gen_id,
             "artifacts": True
         }
