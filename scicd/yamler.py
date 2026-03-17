@@ -32,9 +32,7 @@ def yml_suffix(path: str) -> str:
         if pathlib.Path(path_with_suffix).exists():
             return path_with_suffix
 
-    # Fallback to default
-    return path + ".yml.j2"
-
+    return path + ".yaml"
 
 def expand_vars(data: T) -> T:
     """

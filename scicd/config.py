@@ -8,7 +8,7 @@ from pathlib import Path
 
 import tomli
 
-from scicd.yamler import deep_update, specify, load_yaml
+from scicd.yamler import deep_update, specify, load_yaml, yml_suffix
 
 
 @dataclass(kw_only=True)
@@ -203,6 +203,7 @@ def cascading_config(key, **kwargs):
     These are basically "insignificant" (non-identifying) parameters.
     """
     path = SciCDConfig().workspace_config().path_parameters
+    path = yml_suffix(path) # if a suffix wasn't provided, tries to infer!
 
     # Not using feature
     if path is None:
@@ -230,9 +231,9 @@ def cascading_config(key, **kwargs):
     return specify(config, override, **kwargs)
 
 
-def workspace(**kwargs):
+def get_workspace(**kwargs):
     return SciCDConfig(**kwargs).workspace_config()
 
 
-def family(family=None, **kwargs):
+def get_family(family=None, **kwargs):
     return SciCDConfig(**kwargs).family_config(family)
