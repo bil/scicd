@@ -6,3 +6,4 @@ cyclopts
 tomli
 Jinja2
 PyYAML
+rich

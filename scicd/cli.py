@@ -6,6 +6,7 @@ import os
 import sys
 from typing import Annotated, Optional
 
+import rich
 from cyclopts import App, Parameter
 
 import scicd.build
@@ -14,8 +15,7 @@ import scicd.config
 
 # App initialization with clear metadata
 app = App(
-    name="scicd", 
-    help="Scientific CI/CD: Orchestrate Luigi DAGs on GitLab pipelines."
+    name="scicd", help="Scientific CI/CD: Orchestrate Luigi DAGs on GitLab pipelines."
 )
 
 # Ensure current project directory is in path for module discovery
@@ -111,6 +111,21 @@ def run_gitlab_pipeline(
 
 @app.command()
 def config(
+    **overrides: Annotated[
+        str,
+        Parameter(help="Runtime overrides to apply to the config.", group="Overrides"),
+    ],
+):
+    """
+    Inspects the resolved configuration for a specific task family.
+    Prints the merged result of default, workspace, and family-level configs.
+    """
+    result = scicd.config.SciCDConfig(**overrides)
+    rich.print(result.config_dict)
+
+
+@app.command()
+def task_config(
     family: Annotated[Optional[str], Parameter(help="Task family to inspect.")] = None,
     **overrides: Annotated[
         str,
@@ -121,8 +136,18 @@ def config(
     Inspects the resolved configuration for a specific task family.
     Prints the merged result of default, workspace, and family-level configs.
     """
-    result = scicd.config.get_config(family=family, **overrides)
-    print(result)
+    result = scicd.config.get_family(family=family, **overrides)
+    rich.print(result)
+
+
+@app.command()
+def workspace_config():
+    """
+    Inspects the resolved configuration for a specific task family.
+    Prints the merged result of default, workspace, and family-level configs.
+    """
+    result = scicd.config.get_workspace()
+    rich.print(result)
 
 
 if __name__ == "__main__":

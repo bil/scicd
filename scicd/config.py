@@ -101,7 +101,7 @@ class SciCDConfig:
 
     def __init__(self):
         if not self._initialized:
-            self._base_state: dict = {}
+            self.config_dict: dict = {}
 
             self._load_toml_state()
 
@@ -109,7 +109,7 @@ class SciCDConfig:
 
     def __repr__(self) -> str:
         """Provides a pretty-printed dictionary representation for the CLI."""
-        return pprint.pformat(self._base_state, indent=2, sort_dicts=False)
+        return pprint.pformat(self.config_dict, indent=2, sort_dicts=False)
 
     def _load_toml_state(self):
         """Loads pyproject.toml into the base state."""
@@ -117,7 +117,7 @@ class SciCDConfig:
         if toml_path.exists():
             with open(toml_path, "rb") as f:
                 pyproject_data = tomli.load(f)
-                self._base_state = pyproject_data.get("tool", {}).get("scicd", {})
+                self.config_dict = pyproject_data.get("tool", {}).get("scicd", {})
 
     def override(self, **kwargs):
         """
@@ -164,7 +164,7 @@ class SciCDConfig:
                     )
 
         # Update global state with validated task overrides only
-        self._base_state = deep_update(self._base_state, task_overrides)
+        self.config_dict = deep_update(self.config_dict, task_overrides)
 
     def workspace_config(self) -> WorkspaceConfig:
         """
@@ -172,14 +172,14 @@ class SciCDConfig:
         Ignores any task-specific overrides.
         """
 
-        return self._build_dataclass(WorkspaceConfig, self._base_state)
+        return self._build_dataclass(WorkspaceConfig, self.config_dict)
 
     def family_config(self, family: str = None) -> TaskConfig:
         """
         Returns the resolved execution settings for a specific task family.
         Applies task-specific overrides on top of the root defaults.
         """
-        param = deepcopy(self._base_state)
+        param = deepcopy(self.config_dict)
         tasks_config = param.pop("task", {})
 
         # Apply the specific family overrides
@@ -252,8 +252,8 @@ def cascading_config(family: str, **kwargs):
     return specify(config, override, **kwargs)
 
 
-def get_workspace(**kwargs):
-    return SciCDConfig(**kwargs).workspace_config()
+def get_workspace():
+    return SciCDConfig().workspace_config()
 
 
 def get_family(family: str = None, **kwargs):
