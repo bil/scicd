@@ -218,11 +218,12 @@ class DAG:
 
         # Pull
         if pull_cmd:
-            pull_body = scicd.gitlab.gitlab_info().extend(
+            pull_body = scicd.yamler.deep_update(
+                scicd.gitlab.gitlab_info(),
                 {
                     "stage": "stage_00_pull",
                     "script": [f"mkdir -p {wspace.path_output}", pull_cmd],
-                }
+                },
             )
             all_jobs["scicd_pull_init"] = pull_body
 
@@ -238,13 +239,14 @@ class DAG:
                     for name, body in all_jobs.items()
                     if body.get("stage") == stage_name and "scicd" not in name
                 ]
-                push_body = scicd.gitlab.gitlab_info().extend(
+                push_body = scicd.yamler.deep_update(
+                    scicd.gitlab.gitlab_info(),
                     {
                         "stage": stage_name,
                         "needs": deps,
                         "script": [push_cmd],
                         "when": "always",  # checkpoint failures too
-                    }
+                    },
                 )
 
                 all_jobs[f"checkpoint_{stage_name}"] = push_body
