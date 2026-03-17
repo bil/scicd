@@ -1,36 +1,14 @@
 import pprint
-import re
 import os
 
 from typing import Optional, List, Dict, Any
 from copy import deepcopy
-from collections.abc import Mapping
 from dataclasses import dataclass, field, fields
 from pathlib import Path
 
 import tomli
-import yaml
 
-
-def deep_update(source, overrides):
-    """
-    Performs a recursive dictionary merge.
-
-    Args:
-        source (dict): The base dictionary to be updated.
-        overrides (dict): The dictionary containing overriding values.
-
-    Returns:
-        dict: The updated source dictionary.
-    """
-    source = deepcopy(source)
-    for key, value in overrides.items():
-        if isinstance(value, Mapping) and value:
-            returned = deep_update(source.get(key, {}), value)
-            source[key] = returned
-        else:
-            source[key] = overrides[key]
-    return source
+from scicd.yamler import deep_update, specify, load_yaml
 
 
 @dataclass
@@ -234,28 +212,6 @@ def get_config(family: str = None, **kwargs):
     return str(cfg)
 
 
-def specify(config, override=None, **kwargs):
-    """
-    Merges base parameters with input-specific regex overrides.
-
-    Args:
-        config (dict): Base configuration dictionary.
-        override (list, optional): List of regex rules to apply.
-        **kwargs: Current task inputs used for matching.
-
-    Returns:
-        dict: Final merged parameter dictionary.
-    """
-    out = config.copy()
-    if not override:
-        return out
-    for kws in override[::-1]:  # top rule has priority
-        spec = kws["match"]
-        if all(re.match(v, str(kwargs[k])) for k, v in spec.items()):
-            out = deep_update(out, kws["config"])
-    return out
-
-
 def cascading_config(key, **kwargs):
     """
     Parameter-dependent overwrite of insignificant Task configuration.
@@ -272,8 +228,7 @@ def cascading_config(key, **kwargs):
         print(f"Tried to load parameters file at {str(path)} but didn't exist!")
         return {}
 
-    with open(path, "r", encoding="utf-8") as f:
-        cfg = yaml.safe_load(f)
+    cfg = load_yaml(path)
 
     # Nothing provided for this Task
     if key not in cfg:

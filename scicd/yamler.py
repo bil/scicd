@@ -1,0 +1,148 @@
+"""
+YAML and Jinja2 processing with Type Hints.
+"""
+
+import os
+import re
+import pathlib
+from typing import Any, Dict, List, Optional, TypeVar
+from collections.abc import Mapping
+from copy import deepcopy
+
+import fire
+import frontmatter
+import yaml
+from jinja2 import Environment
+
+# Type alias for common nested structures
+T = TypeVar("T")
+
+
+def yml_suffix(path: str) -> str:
+    """
+    Ensures a path has a valid YAML suffix by checking existence or appending default.
+    """
+    valid_suffixes = [".yml", ".yaml", ".yml.j2", ".yaml.j2"]
+    if any(path.endswith(s) for s in valid_suffixes):
+        return path
+
+    # Check if the file exists with any of the valid suffixes
+    for s in valid_suffixes:
+        path_with_suffix = f"{path}{s}"
+        if pathlib.Path(path_with_suffix).exists():
+            return path_with_suffix
+
+    # Fallback to default
+    return path + ".yml.j2"
+
+
+def expand_vars(data: T) -> T:
+    """
+    Recursively expands environment variables in strings.
+    """
+    if isinstance(data, dict):
+        return {k: expand_vars(v) for k, v in data.items()}  # type: ignore
+    if isinstance(data, list):
+        return [expand_vars(v) for v in data]  # type: ignore
+    if isinstance(data, str):
+        return os.path.expandvars(data)  # type: ignore
+    return data
+
+
+def find_includes(path: str) -> List[str]:
+    """
+    Extracts the 'include' list from YAML front-matter.
+    """
+    path = yml_suffix(path)
+    if not pathlib.Path(path).exists():
+        raise FileNotFoundError(f"Include file not found: {path}")
+
+    post = frontmatter.load(path)
+    includes = post.get("include", [])
+    return includes if isinstance(includes, list) else [includes]
+
+
+def deep_update(source: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Performs a recursive dictionary merge.
+    """
+    source = deepcopy(source)
+    for key, value in overrides.items():
+        if isinstance(value, Mapping) and value:
+            returned = deep_update(source.get(key, {}), value)
+            source[key] = returned
+        else:
+            source[key] = overrides[key]
+    return source
+
+
+def extract_context(path: str, **kwargs: Any) -> Dict[str, Any]:
+    """
+    Constructs a Jinja2 rendering context by recursively loading includes.
+    """
+    includes = find_includes(path)
+    context: Dict[str, Any] = {}
+    for include in includes:
+        context = deep_update(context, load_yaml(include))
+    context = deep_update(context, kwargs)
+    return context
+
+
+def load_metadata(path: str) -> Dict[str, Any]:
+    """
+    Retrieves the raw front-matter metadata from a file.
+    """
+    path = yml_suffix(path)
+    if not pathlib.Path(path).exists():
+        return {}
+    return frontmatter.load(path).metadata
+
+
+def render_string(template_str: str, **kwargs: Any) -> str:
+    """
+    Renders a Jinja2 template string with the given context.
+    """
+    env = Environment()
+    return env.from_string(template_str).render(**kwargs)
+
+
+def load_yaml(path: str, **kwargs: Any) -> Dict[str, Any]:
+    """
+    Renders Jinja2, parses YAML, and applies deep inheritance and variable expansion.
+    """
+    path = yml_suffix(path)
+    if not pathlib.Path(path).exists():
+        raise FileNotFoundError(f"YAML file not found: {path}")
+
+    context = extract_context(path, **kwargs)
+    post = frontmatter.load(path)
+
+    env = Environment()
+    rendered = env.from_string(post.content).render(context)
+    data: Dict[str, Any] = yaml.safe_load(rendered) or {}
+
+    return expand_vars(data)
+
+
+def specify(
+    config: Dict[str, Any],
+    override: Optional[List[Dict[str, Any]]] = None,
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    """
+    Merges base parameters with input-specific regex overrides.
+    """
+    out = config.copy()
+    if not override:
+        return out
+
+    for kws in override[::-1]:  # top rule has priority
+        spec = kws.get("match", {})
+        # Ensure values are matched as strings for regex compatibility
+        if all(re.match(str(v), str(kwargs.get(k))) for k, v in spec.items()):
+            out = deep_update(out, kws.get("config", {}))
+    return out
+
+
+if __name__ == "__main__":
+    fire.Fire()

@@ -11,7 +11,7 @@ import yaml
 import luigi
 
 from scicd.config import SciCDConfig
-import scicd.config
+import scicd.yamler
 
 
 def _slugify(text: str) -> str:
@@ -87,7 +87,7 @@ class BaseNode(ABC):
         if self.cfg.retries > 0:
             info["retry"] = int(self.cfg.retries)
 
-        info = scicd.config.deep_update(info, dict(self.cfg.gitlab_extras))
+        info = scicd.yamler.deep_update(info, dict(self.cfg.gitlab_extras))
         return info
 
 
