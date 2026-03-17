@@ -4,7 +4,7 @@ CLI interface for scicd using Cyclopts.
 
 import os
 import sys
-from typing import Annotated, Dict, Optional
+from typing import Annotated, Optional
 
 from cyclopts import App, Parameter
 
@@ -14,7 +14,8 @@ import scicd.config
 
 # App initialization with clear metadata
 app = App(
-    name="scicd", help="Scientific CI/CD: Orchestrate Luigi DAGs on GitLab pipelines."
+    name="scicd", 
+    help="Scientific CI/CD: Orchestrate Luigi DAGs on GitLab pipelines."
 )
 
 # Ensure current project directory is in path for module discovery
@@ -34,7 +35,7 @@ def build_gitlab(
         str, Parameter(help="Output path for the YAML generated file.")
     ] = ".gitlab-ci.yml",
     **overrides: Annotated[
-        Dict[str, str],
+        str,  # Annotated as str so Cyclopts parses --key val pairs correctly
         Parameter(
             help="Dynamic overrides for Luigi params, SciCD config, or GitLab boilerplate (e.g., --cpu 4 --project $CI_PROJECT_PATH)",
             group="Overrides",
@@ -64,7 +65,7 @@ def export_dag(
         str, Parameter(help="Output path for the Graphviz .dot file.")
     ] = "dag.dot",
     **overrides: Annotated[
-        Dict[str, str],
+        str,
         Parameter(
             help="Config overrides used during DAG generation.", group="Overrides"
         ),
@@ -95,7 +96,7 @@ def lint_gitlab(
 def run_gitlab_pipeline(
     branch: Annotated[str, Parameter(help="The branch to trigger on.")] = "main",
     **variables: Annotated[
-        Dict[str, str],
+        str,
         Parameter(
             help="CI/CD variables passed to the pipeline trigger.", group="Variables"
         ),
@@ -103,7 +104,7 @@ def run_gitlab_pipeline(
 ):
     """
     Triggers a remote GitLab pipeline execution.
-    Example: scicd run-gitlab-pipeline --branch develop --RUNNER internal --DEBUG true
+    Usage: scicd run-gitlab-pipeline --branch develop --RUNNER internal --DEBUG true
     """
     scicd.gitlab.run_pipeline(branch=branch, **variables)
 
@@ -112,7 +113,7 @@ def run_gitlab_pipeline(
 def config(
     family: Annotated[Optional[str], Parameter(help="Task family to inspect.")] = None,
     **overrides: Annotated[
-        Dict[str, str],
+        str,
         Parameter(help="Runtime overrides to apply to the config.", group="Overrides"),
     ],
 ):
