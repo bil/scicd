@@ -90,7 +90,7 @@ class Autotask(luigi.Task):
         # Optional remote check
         # If enabled, try to pull the missing pieces
         if wspace.remote_completion_enabled and wspace.path_remote:
-            if scicd.remote.pull(missing_locally):
+            if scicd.remote.pull(*missing_locally):
                 for ot in outputs:
                     p = Path(ot.path)
                     f_p = p.parent / ".luigi_fingerprints" / f"{p.name}.fingerprint"
@@ -137,4 +137,4 @@ def _checkpoint_task(task: Autotask):
 
     # Remote Push (if configured)
     if wspace.path_remote and files_to_archive:
-        scicd.remote.push(files_to_archive)
+        scicd.remote.push(*files_to_archive)

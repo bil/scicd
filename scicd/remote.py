@@ -2,37 +2,108 @@ import os
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import List
+from typing import Annotated, List
 
 import requests
+import cyclopts
+from cyclopts import Parameter
+
 import scicd.config
 
+# Custom groups for cleaner --help output
+SURGICAL_GROUP = "Surgical Commands (Used by Tasks)"
+GLOBAL_GROUP = "Global Commands (Used by CI/CD)"
 
-def push(files: List[Path]) -> bool:
-    """Generic push for a list of local files."""
+app = cyclopts.App(help="SciCD Remote Sync Utility.")
+
+
+@app.command()
+def push(
+    *files: Annotated[
+        Path,
+        Parameter(
+            show_default=False,
+            help="One or more local file paths to archive to the remote.",
+        ),
+    ]
+) -> bool:
+    """
+    Push specific local files to the remote archive.
+
+    This is typically called automatically by a task upon successful completion.
+
+    Example:
+        python3 -m scicd.remote push results/plot.png results/data.csv
+    """
+    wspace = scicd.config.get_workspace()
+    protocol = wspace.remote_protocol
+
+    if protocol == "rclone":
+        return _rclone_batch(wspace, list(files), "push")
+    elif protocol == "https":
+        return _https_batch(wspace, list(files), "push")
+
+    raise ValueError(f"Unsupported protocol for push: {protocol}")
+
+
+@app.command()
+def pull(
+    *files: Annotated[
+        Path,
+        Parameter(
+            show_default=False, help="One or more remote file paths to recover locally."
+        ),
+    ]
+) -> bool:
+    """
+    Pull specific files from the remote archive to local storage.
+
+    Used for 'Lazy Hydration'—recovering only the upstream dependencies
+    needed for a specific task.
+
+    Example:
+        python3 -m scicd.remote pull results/raw_data.fits
+    """
+    wspace = scicd.config.get_workspace()
+    protocol = wspace.remote_protocol
+
+    if protocol == "rclone":
+        return _rclone_batch(wspace, list(files), "pull")
+    elif protocol == "https":
+        return _https_batch(wspace, list(files), "pull")
+
+    raise ValueError(f"Unsupported protocol for pull: {protocol}")
+
+
+@app.command()
+def pull_full() -> bool:
+    """
+    Perform a complete sync (Global Init) from remote to local.
+
+    STRICT REQUIREMENT: This command only supports 'rclone' protocols.
+    It is intended for stage_00 of GitLab pipelines to populate the
+    persistent storage with existing baseline data.
+    """
     wspace = scicd.config.get_workspace()
     protocol = getattr(wspace, "remote_protocol", "rclone")
 
-    if protocol == "rclone":
-        return _rclone_push_pull(wspace, files, direction="push")
-    elif protocol == "https":
-        return _https_push_pull(wspace, files, direction="push")
-    return False
-
-
-def pull(files: List[Path]) -> bool:
-    """Generic pull for a list of local files."""
-    wspace = scicd.config.get_workspace()
-    protocol = getattr(wspace, "remote_protocol", "rclone")
+    if not wspace.path_remote:
+        print("No remote path configured. Skipping pull-full.")
+        return True
 
     if protocol == "rclone":
-        return _rclone_push_pull(wspace, files, direction="pull")
-    elif protocol == "https":
-        return _https_push_pull(wspace, files, direction="pull")
-    return False
+        flags = " ".join(wspace.rclone_flags)
+        cmd = f"rclone copy {wspace.path_remote} {wspace.path_output} {flags}"
+        subprocess.check_call(cmd, shell=True)
+        return True
+
+    raise NotImplementedError(
+        f"pull-full is currently only supported for rclone. "
+        f"Protocol '{protocol}' requires a manual sync or surgical pulls."
+    )
 
 
-def _https_push_pull(
+def _https_batch(
     wspace: scicd.config.WorkspaceConfig, files: List[Path], direction="push"
 ) -> bool:
     """HTTPS implementation using requests Session for connection pooling."""
@@ -79,7 +150,7 @@ def _https_push_pull(
     return True
 
 
-def _rclone_push_pull(
+def _rclone_batch(
     wspace: scicd.config.WorkspaceConfig, files: List[Path], direction="push"
 ) -> bool:
     # ... (Your existing rclone logic stays exactly the same) ...

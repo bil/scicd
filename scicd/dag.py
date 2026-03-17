@@ -192,22 +192,25 @@ class DAG:
         self.nodes = nodes
 
     def render_gitlab(self, **boilerplate) -> dict:
-        cfg = SciCDConfig()
-        wspace = cfg.workspace_config()
-        pull_cmd = cfg.get_sync_command(direction="pull")
-        push_cmd = cfg.get_sync_command(direction="push")
+        "Generate .gitlab-ci.yml file"
+        wspace = scicd.config.get_workspace()
+
+        # For a global initial pull:
+        # 1. Must have a remote path
+        # 2. Must be using rclone
+        use_global_pull = (wspace.path_remote) and (wspace.remote_protocol == "rclone")
 
         pipeline = deepcopy(boilerplate)
         all_jobs = {}
 
-        # Functional Jobs: pure execution
+        # Actual work
         for node in self.nodes:
             for job_dict in node.to_gitlab():
                 for name, body in job_dict.items():
-                    # Add needs for pull
-                    existing_needs = body.get("needs", [])
-                    if pull_cmd:
-                        body["needs"] = ["scicd_pull_init"] + existing_needs
+                    # Link to pull_init only if we are actually generating it
+                    if use_global_pull:
+                        existing_needs = body.get("needs", [])
+                        body["needs"] = ["__pull_init__"] + existing_needs
                     all_jobs[name] = body
 
         # Identify functional stages
@@ -216,42 +219,24 @@ class DAG:
             key=lambda x: int(x.split("_")[1]) if "_" in x else 0,
         )
 
-        # Pull
-        if pull_cmd:
+        # Generate the Pull Job only for rclone
+        if use_global_pull:
             pull_body = scicd.yamler.deep_update(
                 scicd.gitlab.gitlab_info(),
                 {
                     "stage": "stage_00_pull",
-                    "script": [f"mkdir -p {wspace.path_output}", pull_cmd],
+                    "script": [
+                        f"mkdir -p {wspace.path_output}",
+                        "python3 -m scicd.remote pull-full",
+                    ],
                 },
             )
-            all_jobs["scicd_pull_init"] = pull_body
+            all_jobs["__pull_init__"] = pull_body
+            pipeline["stages"] = ["stage_00_pull"] + unique_stages
+        else:
+            # If no global pull, just use the functional stages
+            pipeline["stages"] = unique_stages
 
-        # Push: Checkpoint after each stage
-        if push_cmd:
-            for stage_name in unique_stages:
-                if stage_name == "stage_00_pull":
-                    continue
-
-                # Wait for functional jobs in this stage
-                deps = [
-                    name
-                    for name, body in all_jobs.items()
-                    if body.get("stage") == stage_name and "scicd" not in name
-                ]
-                push_body = scicd.yamler.deep_update(
-                    scicd.gitlab.gitlab_info(),
-                    {
-                        "stage": stage_name,
-                        "needs": deps,
-                        "script": [push_cmd],
-                        "when": "always",  # checkpoint failures too
-                    },
-                )
-
-                all_jobs[f"checkpoint_{stage_name}"] = push_body
-
-        pipeline["stages"] = ["stage_00_pull"] + unique_stages
         pipeline.update(all_jobs)
         return pipeline
 

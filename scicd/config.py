@@ -187,32 +187,6 @@ class SciCDConfig:
 
         return self._build_dataclass(TaskConfig, param)
 
-    def get_sync_command(self, direction: str = "push") -> str:
-        """
-        Generates an rclone command with a safety check for pulls.
-        """
-        wspace = self.workspace_config()
-
-        if not wspace.path_remote:
-            return None
-
-        # Get flags from config
-        flags = " ".join(wspace.rclone_flags)
-
-        if direction == "pull":
-            src = wspace.path_remote
-            dest = wspace.path_output
-
-            return (
-                f"if rclone lsf {src} >/dev/null 2>&1; then "
-                f"rclone copy {src} {dest} {flags}; "
-                f"else echo 'Remote source {src} not found, starting with empty local directory.'; fi"
-            )
-
-        src = wspace.path_output
-        dest = wspace.path_remote
-        return f"rclone copy {src} {dest} {flags}"
-
     def _build_dataclass(
         self,
         config_class: type[WorkspaceConfig] | type[TaskConfig],
@@ -246,7 +220,7 @@ def get_config(family: str = None, **kwargs):
     return str(cfg)
 
 
-def cascading_config(key, **kwargs):
+def cascading_config(family: str, **kwargs):
     """
     Parameter-dependent overwrite of insignificant Task configuration.
     These are basically "insignificant" (non-identifying) parameters.
@@ -265,13 +239,11 @@ def cascading_config(key, **kwargs):
     cfg = load_yaml(path)
 
     # Nothing provided for this Task
-    if key not in cfg:
-        print("No config for task")
+    if family not in cfg:
         return {}
 
     # Override default config
-    print("Overriding!")
-    cfg = cfg[key]
+    cfg = cfg[family]
     config = cfg.get("config", {})
     override = cfg.get("override", [])
     print(config, override)
@@ -283,5 +255,5 @@ def get_workspace(**kwargs):
     return SciCDConfig(**kwargs).workspace_config()
 
 
-def get_family(family=None, **kwargs):
+def get_family(family: str = None, **kwargs):
     return SciCDConfig(**kwargs).family_config(family)
