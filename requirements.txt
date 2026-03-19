@@ -1,0 +1,9 @@
+python-dotenv
+python-gitlab
+python-frontmatter
+luigi[toml]
+cyclopts
+tomli
+Jinja2
+PyYAML
+rich
