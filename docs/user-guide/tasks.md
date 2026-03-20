@@ -26,7 +26,6 @@ Standard Luigi tasks are considered "complete" if their output file exists. `Has
 - **Cascading Configuration** (Insignificant parameters from YAML)
 
 ### 2. Standardized Pathing
-
 `HashTask` provides an `output_path` helper that automatically anchors your task's data within the workspace's remote root.
 
 ```python
@@ -48,7 +47,45 @@ class ProcessData(HashTask):
             f.write("result")
 ```
 
+## Centralized Parameter Management
+
+For large pipelines, managing individual YAML files for every task can be cumbersome. `HashTask` supports a centralized parameter model via your `scicd.yaml` configuration.
+
+### Configuration
+
+Add the following to your `user` section:
+
+```yaml
+# scicd.yaml
+user:
+  path_cascade: "params.yml.j2" # Central file for all task parameters
+  cascade_root: ["pipelines", "v1"] # Optional: Drill into nested keys
+```
+
+### Centralized File Structure
+
+Your centralized file (e.g., `params.yml.j2`) should be structured with task family names as keys:
+
+```yaml
+# params.yml.j2
+pipelines:
+  v1:
+    ProcessData:
+      config:
+        threshold: 0.5
+      override:
+        - match: { env: "prod" }
+          config: { threshold: 0.8 }
+
+    OtherTask:
+      config:
+        window: 10
+```
+
+When `path_cascade` is defined, `HashTask` will automatically look for its configuration within that file, namespaced by its class name (and optionally prefixed by `cascade_root`).
+
 ## Summary: Standard vs. HashTask
+
 
 | Feature | `luigi.Task` | `HashTask` |
 | :--- | :---: | :---: |
