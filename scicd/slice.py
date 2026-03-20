@@ -1,10 +1,11 @@
-import importlib
+"""
+Module docstring.
+"""
 import os
 import json
-import sys
-from typing import Annotated
+import subprocess
+from typing import Annotated, List, Dict, Any
 
-import luigi
 import yaml
 from cyclopts import App, Parameter
 
@@ -16,14 +17,19 @@ app = App(help="Slicing and child-pipeline generation utilities.")
 def generate_child_pipeline_config(
     family: str, manifest_path: str, cfg: TaskConfig, gitlab_info: dict, gen_id: str
 ) -> dict:
+    """
+    Generate the YAML configuration for a GitLab child pipeline.
+    """
     worker_job = gitlab_info.copy()
+    workers = cfg.concurrency.workers
 
     worker_job["stage"] = "execute"
-    worker_job["parallel"] = cfg.concurrency_workers
+    worker_job["parallel"] = workers
     worker_job["script"] = [
-        f"{cfg.python_executable} -m scicd.slice slice-run --manifest-path {manifest_path}"
+        f"python3 -m scicd.slice slice-run --manifest-path {manifest_path}"
     ]
-    # https://gitlab.com/gitlab-org/gitlab/-/work_items/213457
+
+    # Ensure the workers can access the manifest from the generator job
     worker_job["needs"] = [
         {
             "pipeline": "$PARENT_PIPELINE_ID",
@@ -39,10 +45,9 @@ def generate_child_pipeline_config(
 
 @app.command()
 def generate(
-    module: Annotated[str, Parameter(help="The Python module containing the tasks.")],
-    family: Annotated[str, Parameter(help="The Luigi task family class name.")],
-    all_params_json: Annotated[
-        str, Parameter(help="JSON list of all task parameters.")
+    family: Annotated[str, Parameter(help="The task family name.")],
+    commands_json: Annotated[
+        str, Parameter(help="JSON list of all task commands (List[List[str]]).")
     ],
     cfg_json: Annotated[
         str, Parameter(help="JSON string of the TaskConfig dataclass.")
@@ -50,17 +55,20 @@ def generate(
     gitlab_info_json: Annotated[
         str, Parameter(help="JSON string of compiled GitLab info.")
     ],
-    gen_id: Annotated[str, Parameter(help="Trigger job identifier.")],
+    gen_id: Annotated[str, Parameter(help="The generator job identifier.")],
 ):
-    param_list = json.loads(all_params_json)
+    """
+    Generate a manifest of commands and a child pipeline YAML.
+    """
+    command_list = json.loads(commands_json)
     cfg_dict = json.loads(cfg_json)
     gitlab_info = json.loads(gitlab_info_json)
 
+    # Reconstruct TaskConfig for validation and helper access
     cfg = TaskConfig(**cfg_dict)
 
-    manifest_data = []
-    for params in param_list:
-        manifest_data.append({"module": module, "family": family, "params": params})
+    # The manifest now stores raw commands instead of Luigi metadata
+    manifest_data = [{"command": cmd} for cmd in command_list]
 
     with open("manifest.yml", "w", encoding="utf-8") as f:
         yaml.dump(manifest_data, f, default_flow_style=False)
@@ -81,34 +89,30 @@ def generate(
 def slice_run(
     manifest_path: Annotated[str, Parameter(help="Path to the manifest.yml file.")],
 ):
+    """
+    Execute the slice of tasks assigned to this parallel worker.
+    """
+    # GitLab CI provides these variables for parallel jobs
     node_index = int(os.environ.get("CI_NODE_INDEX", 1)) - 1
     node_total = int(os.environ.get("CI_NODE_TOTAL", 1))
 
     with open(manifest_path, "r", encoding="utf-8") as f:
         all_specs = yaml.safe_load(f)
 
-    my_specs = [
+    # Determine which tasks this specific node is responsible for
+    my_tasks = [
         spec for i, spec in enumerate(all_specs) if i % node_total == node_index
     ]
 
-    if my_specs:
-        print(f"Worker {node_index+1}/{node_total} running {len(my_specs)} tasks.")
-        _slice_run(my_specs)
+    if my_tasks:
+        print(f"Worker {node_index+1}/{node_total} running {len(my_tasks)} tasks.")
+        for task in my_tasks:
+            cmd = task["command"]
+            print(f"Executing: {' '.join(cmd)}")
+            # Execute the command and fail if any task fails
+            subprocess.run(cmd, check=True)
     else:
         print(f"Worker {node_index+1}/{node_total} has no tasks to run.")
-
-
-def _slice_run(task_specs: list):
-    luigi_tasks = []
-    for spec in task_specs:
-        mod = importlib.import_module(spec["module"])
-        task_cls = getattr(mod, spec["family"])
-        instantiated_task = task_cls.from_str_params(spec["params"])
-        luigi_tasks.append(instantiated_task)
-
-    success = luigi.build(luigi_tasks, local_scheduler=True)
-    if not success:
-        sys.exit(1)
 
 
 if __name__ == "__main__":

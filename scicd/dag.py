@@ -1,8 +1,11 @@
+"""
+Module docstring.
+"""
 from __future__ import annotations  # Put this at the very top of your file
 from copy import deepcopy
 import json
 import re
-from typing import List
+from typing import List, Dict, Any
 from dataclasses import dataclass, asdict
 from abc import ABC, abstractmethod
 from functools import cached_property
@@ -10,128 +13,150 @@ from functools import cached_property
 import yaml
 import luigi
 
-from scicd.config import SciCDConfig
 import scicd.yamler
 import scicd.gitlab
-
-
-def _slugify(text: str) -> str:
-    # Replace anything that isn't a letter, number, or underscore with '_'
-    # This handles periods, dashes, spaces, and weird symbols in one pass.
-    clean = re.sub(r"[^a-zA-Z0-9_]", "_", text)
-    # Collapse multiple underscores (e.g., 'a...b' -> 'a___b' -> 'a_b')
-    return re.sub(r"_+", "_", clean).strip("_")
+import scicd.adapter
 
 
 @dataclass
 class BaseNode(ABC):
-    family: str
-    tasks: List[luigi.Task]
+    work: List[scicd.adapter.BaseAdapter]
     rank: int
-    task_deps: list[BaseNode]
+    node_deps: list[BaseNode]
 
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__
         # Just show the IDs of dependencies to avoid infinite recursion
-        dep_ids = [d.node_id for d in self.task_deps]
+        dep_ids = [d.identifier for d in self.node_deps]
         return (
-            f"<{cls_name} id='{self.node_id}' "
-            f"rank={self.rank} tasks={len(self.tasks)} "
+            f"<{cls_name} id='{self.identifier}' "
+            f"rank={self.rank} work={len(self.work)} "
             f"needs={dep_ids}>"
         )
 
     @property
-    @abstractmethod
-    def node_id(self) -> str:
-        """Unique identifier for the GitLab Job."""
+    def identifier(self) -> str:
+        return self.work[0].identifier if self.work else "unknown"
 
+    @property
+    def name(self) -> str:
+        """The logical name of the task family represented by this node."""
+        return self.work[0].name if self.work else "unknown"
+
+    @property
     @abstractmethod
-    def get_dot_label(self) -> str:
+    def dot_label(self) -> str:
         """Return the Graphviz label string for the node."""
-
-    @abstractmethod
-    def to_gitlab(self) -> List[dict]:
-        """generate job dict(s)"""
-
-    @cached_property
-    def cfg(self) -> scicd.config.TaskConfig:
-        """Standardized config lookup for all nodes."""
-        return SciCDConfig().family_config(self.family)
-
-    @cached_property
-    def workspace_cfg(self) -> scicd.config.WorkspaceConfig:
-        return SciCDConfig().workspace_config()
 
     @property
     def needs(self) -> List[str]:
         """
-        Flattened list of all node_id dependencies.
+        Flattened list of all identifier dependencies.
         """
-        # We take all values from the task_deps dict and flatten them
-        all_ids = [node.node_id for node in self.task_deps]
+        # We take all values from the node_deps dict and flatten them
+        all_ids = [node.identifier for node in self.node_deps]
         return sorted(list(set(all_ids)))
 
-    def gitlab_info(self) -> dict:
-        return scicd.gitlab.gitlab_info(cfg=self.cfg)
+    @abstractmethod
+    def to_gitlab(self) -> List[Dict[str, Any]]:
+        """
+        Render computation into Gitlab CI/CD jobs
+        """
+
+
+@dataclass
+class BijectNode(BaseNode):
+    """
+    A 1:1 mapping from a unit of work to a CI/CD job
+    """
+
+    def __post_init__(self):
+        if not self.work or len(self.work) != 1:
+            raise ValueError(f"BijectNode expecs 1 unit of work, received: {self.work}")
+
+    @property
+    def dot_label(self) -> str:
+        # Biject: Family (param1=val1, param2=val2)
+        params = self.work[0].params
+        param_str = ", ".join([f"{k}={v}" for k, v in params.items()])
+
+        if param_str:
+            return f"{self.work[0].name}\\n({param_str})"
+        else:
+            return self.work[0].name
+
+    def to_gitlab(self) -> List[dict]:
+        # I changed return type to dict because 1 node = 1 job usually
+        job = scicd.gitlab.gitlab_info(self.work[0].cfg)
+        job["stage"] = f"stage_{self.rank}"
+        job["script"] = [" ".join(self.work[0].command)]
+
+        if self.needs:
+            job["needs"] = self.needs
+
+        return [{self.identifier: job}]
 
 
 @dataclass
 class SliceNode(BaseNode):
-    @property
-    def node_id(self) -> str:
-        return f"{self.family}_rank{self.rank}_trigger"
+    """
+    Groups multiple units of work to be executed in a dynamic child pipeline.
+    """
 
-    def get_dot_label(self) -> str:
+    @property
+    def identifier(self) -> str:
+        return f"{self.name}_rank{self.rank}_slice"
+
+    @property
+    def dot_label(self) -> str:
         # Slice: Family
         # [param1=val1]
-        # [param1=val2]
-        label_lines = [self.family]
-        for task in self.tasks:
-            params = task.to_str_params(only_significant=True)
+        # [param2=val2]
+        label_lines = [self.name]
+        for adapter in self.work:
+            params = adapter.params
             param_str = ", ".join([f"{k}={v}" for k, v in params.items()])
             label_lines.append(f"[{param_str}]" if param_str else "[]")
         return "\\n".join(label_lines)
 
-    def to_gitlab(self) -> List[dict]:
-        # Extract parameters from all tasks
-        all_task_params = [
-            task.to_str_params(only_significant=True) for task in self.tasks
-        ]
-        params_json = json.dumps(all_task_params)
+    def to_gitlab(self) -> List[Dict[str, Any]]:
+        # Extract commands from all work units
+        all_commands = [adapter.command for adapter in self.work]
+        commands_json = json.dumps(all_commands)
 
-        # Serialize Resolved Configuration (The Source of Truth)
-        cfg_json = json.dumps(asdict(self.cfg))
+        # Use the configuration from the first work unit as the basis
+        cfg = self.work[0].cfg
+        cfg_json = json.dumps(asdict(cfg))
 
-        # Serialize GitLab boilerplate
-        gitlab_info_json = json.dumps(self.gitlab_info())
+        # Serialize platform-specific boilerplate
+        gitlab_info = scicd.gitlab.gitlab_info(cfg)
+        gitlab_info_json = json.dumps(gitlab_info)
 
-        gen_id = f"{self.family}_rank{self.rank}_gen"
+        gen_id = f"{self.name}_rank{self.rank}_gen"
 
-        # Generator
-        gen_job = self.gitlab_info()
+        # Generator Job: Dynamically creates the child pipeline YAML
+        gen_job = deepcopy(gitlab_info)
         gen_job["stage"] = f"stage_{self.rank}"
+
         gen_job["script"] = [
-            f"{self.cfg.python_executable} -m scicd.slice generate "
-            f"--module {self.tasks[0].__module__} "
-            f"--family {self.family} "
-            f"--all-params-json '{params_json}' "
+            f"python3 -m scicd.slice generate "
+            f"--family {self.name} "
+            f"--commands-json '{commands_json}' "
             f"--cfg-json '{cfg_json}' "
             f"--gitlab-info-json '{gitlab_info_json}' "
             f"--gen-id '{gen_id}'"
         ]
         gen_job["artifacts"] = {"paths": ["manifest.yml", "child_pipeline.yml"]}
+
         if self.needs:
             gen_job["needs"] = self.needs
 
-        # Trigger
-        # These can have limited keys
+        # Trigger Job: Launches the child pipeline generated above
         trigger_job = {
             "stage": f"stage_{self.rank}",
             "variables": {"PARENT_PIPELINE_ID": "$CI_PIPELINE_ID"},
             "trigger": {
-                "include": [
-                    {"artifact": "child_pipeline.yml", "job": gen_id},
-                ],
+                "include": [{"artifact": "child_pipeline.yml", "job": gen_id}],
                 "strategy": "depend",
                 "forward": {
                     "pipeline_variables": True,
@@ -141,49 +166,7 @@ class SliceNode(BaseNode):
             "needs": [gen_id],
         }
 
-        return [{gen_id: gen_job}, {self.node_id: trigger_job}]
-
-
-@dataclass
-class BijectNode(BaseNode):
-    @property
-    def node_id(self) -> str:
-        task = self.tasks[0]
-        params = task.to_str_params(only_significant=True)
-        params_str = "_".join([f"{k}_{v}" for k, v in params.items()])
-        return _slugify(f"{self.family}_{params_str}")[:64]
-
-    def get_dot_label(self) -> str:
-        # Biject: Family (param1=val1, param2=val2)
-        task = self.tasks[0]
-        params = task.to_str_params(only_significant=True)
-        param_str = ", ".join([f"{k}={v}" for k, v in params.items()])
-        return f"{self.family}\\n({param_str})" if param_str else self.family
-
-    def get_command(self) -> str:
-        task = self.tasks[0]
-        module = task.__module__
-        family = task.task_family
-
-        params_json = json.dumps(task.to_str_params(only_significant=True))
-
-        return (
-            f"{self.cfg.python_executable} -m scicd.biject run "
-            f"--module {module} "
-            f"--family {family} "
-            f"--params-json '{params_json}'"
-        )
-
-    def to_gitlab(self) -> List[dict]:
-        # I changed return type to dict because 1 node = 1 job usually
-        job = self.gitlab_info()
-        job["stage"] = f"stage_{self.rank}"
-        job["script"] = [self.get_command()]
-
-        if self.needs:
-            job["needs"] = self.needs
-
-        return [{self.node_id: job}]
+        return [{gen_id: gen_job}, {self.identifier: trigger_job}]
 
 
 class DAG:
@@ -193,25 +176,13 @@ class DAG:
 
     def render_gitlab(self, **boilerplate) -> dict:
         "Generate .gitlab-ci.yml file"
-        wspace = scicd.config.get_workspace()
-
-        # For a global initial pull:
-        # 1. Must have a remote path
-        # 2. Must be using rclone
-        use_global_pull = (wspace.path_remote) and (wspace.remote_protocol == "rclone")
-
         pipeline = deepcopy(boilerplate)
         all_jobs = {}
 
         # Actual work
         for node in self.nodes:
             for job_dict in node.to_gitlab():
-                for name, body in job_dict.items():
-                    # Link to pull_init only if we are actually generating it
-                    if use_global_pull:
-                        existing_needs = body.get("needs", [])
-                        body["needs"] = ["__pull_init__"] + existing_needs
-                    all_jobs[name] = body
+                all_jobs.update(job_dict)
 
         # Identify functional stages
         unique_stages = sorted(
@@ -219,24 +190,7 @@ class DAG:
             key=lambda x: int(x.split("_")[1]) if "_" in x else 0,
         )
 
-        # Generate the Pull Job only for rclone
-        if use_global_pull:
-            pull_body = scicd.yamler.deep_update(
-                scicd.gitlab.gitlab_info(),
-                {
-                    "stage": "stage_00_pull",
-                    "script": [
-                        f"mkdir -p {wspace.path_output}",
-                        "python3 -m scicd.remote pull-full",
-                    ],
-                },
-            )
-            all_jobs["__pull_init__"] = pull_body
-            pipeline["stages"] = ["stage_00_pull"] + unique_stages
-        else:
-            # If no global pull, just use the functional stages
-            pipeline["stages"] = unique_stages
-
+        pipeline["stages"] = unique_stages
         pipeline.update(all_jobs)
         return pipeline
 
@@ -262,7 +216,7 @@ class DAG:
 
         # Use a deterministic sort to ensure node_0 is always the same node across runs
         # We sort by the dot label string to ensure stable ordering in Git
-        sorted_nodes = sorted(self.nodes, key=lambda x: x.get_dot_label())
+        sorted_nodes = sorted(self.nodes, key=lambda x: x.dot_label)
 
         # Use the Python object's memory ID for the dictionary ONLY during this
         # specific loop to map objects to stable strings like "node_0"
@@ -274,16 +228,18 @@ class DAG:
 
         for _, nodes in sorted(ranks.items()):
             # Sort within rank for deterministic {rank=same} blocks
-            current_rank_nodes = sorted(nodes, key=lambda x: x.get_dot_label())
+            current_rank_nodes = sorted(nodes, key=lambda x: x.dot_label)
 
-            node_ids = " ".join([f'"{node_to_id[id(n)]}"' for n in current_rank_nodes])
-            dot_lines.append(f"    {{rank=same; {node_ids} }}")
+            identifiers = " ".join(
+                [f'"{node_to_id[id(n)]}"' for n in current_rank_nodes]
+            )
+            dot_lines.append(f"    {{rank=same; {identifiers} }}")
 
             for node in current_rank_nodes:
                 color = "lightblue" if isinstance(node, SliceNode) else "lightgrey"
 
                 # Clean up the label to prevent DOT syntax errors
-                label = node.get_dot_label().replace('"', '\\"')
+                label = node.dot_label.replace('"', '\\"')
 
                 # Use the stable node_i name
                 stable_id = node_to_id[id(node)]
@@ -294,7 +250,7 @@ class DAG:
         # Edges using stable IDs
         for node in self.nodes:
             child_id = node_to_id[id(node)]
-            for parent in node.task_deps:
+            for parent in node.node_deps:
                 parent_id = node_to_id[id(parent)]
                 dot_lines.append(f'    "{parent_id}" -> "{child_id}";')
 

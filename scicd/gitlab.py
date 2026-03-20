@@ -1,3 +1,6 @@
+"""
+Module docstring.
+"""
 import os
 from pathlib import Path
 
@@ -5,34 +8,41 @@ import gitlab
 from dotenv import load_dotenv
 
 import scicd.yamler
-from scicd.config import SciCDConfig, get_family
+from scicd.config import TaskConfig, get_workspace
 from scicd.git import get_branch
 
 
-def gitlab_info(family: str = None, cfg: scicd.config.TaskConfig = None) -> dict:
+def gitlab_info(cfg: TaskConfig) -> dict:
     """
-    Load generic gitlab job keys,
+    Load generic gitlab job keys.
     """
+    info = {}
 
-    if cfg is None:
-        cfg = get_family(family)
+    if cfg.image:
+        info["image"] = str(cfg.image)
 
-    info = {
-        "image": str(cfg.image),
-        "variables": dict(cfg.variables),
-    }
-    for key in cfg.memory_request_vars:
-        info["variables"][key] = str(cfg.memory)
-    for key in cfg.cpu_request_vars:
-        info["variables"][key] = str(cfg.cpu)
+    # Variables includes standard env vars and any executor specific vars
+    variables = dict(cfg.variables) if cfg.variables else {}
+    if cfg.executor_config:
+        variables.update(cfg.executor_config)
+
+    if variables:
+        info["variables"] = variables
 
     if cfg.tags:
         info["tags"] = list(cfg.tags)
 
-    if cfg.retries > 0:
-        info["retry"] = int(cfg.retries)
+    if cfg.retry > 0:
+        info["retry"] = int(cfg.retry)
 
-    info = scicd.yamler.deep_update(info, dict(cfg.gitlab_extras))
+    # Timeouts in gitlab
+    if cfg.timeout:
+        info["timeout"] = str(cfg.timeout)
+
+    # Any direct CI/CD passthrough config (interruptible, resource_group, etc)
+    if cfg.cicd_config:
+        info = scicd.yamler.deep_update(info, dict(cfg.cicd_config))
+
     return info
 
 
@@ -68,13 +78,17 @@ def lint_pipeline(yml_filepath: str = ".gitlab-ci.yml") -> bool:
         )
 
     # Grab the global workspace config
-    config = SciCDConfig().workspace_config()
-    url = config.gitlab_url
-    project_path = config.gitlab_project
+    workspace = get_workspace()
 
-    if not project_path:
+    if not workspace.repository or workspace.repository.platform != "gitlab":
+        raise RuntimeError("Workspace repository is not configured for GitLab.")
+
+    url = workspace.repository.url
+    project_path = workspace.repository.project
+
+    if not project_path or not url:
         raise RuntimeError(
-            "Missing 'gitlab_project' in [tool.scicd] of pyproject.toml."
+            "Missing repository 'url' or 'project' in .scicd/config.yaml"
         )
 
     # Connect to GitLab and get the project context
@@ -84,7 +98,7 @@ def lint_pipeline(yml_filepath: str = ".gitlab-ci.yml") -> bool:
     except gitlab.exceptions.GitlabGetError as e:
         raise RuntimeError(
             f"Could not find GitLab project: '{project_path}' at {url}.\n"
-            f"Check 'gitlab_project' in pyproject.toml."
+            f"Check repository configuration in .scicd/config.yaml."
         ) from e
 
     # Send the content to the project-level CI Linter
@@ -115,7 +129,7 @@ def lint_pipeline(yml_filepath: str = ".gitlab-ci.yml") -> bool:
 
 def run_pipeline(branch: str = None, **pipeline_vars):
     """
-    Triggers a GitLab pipeline for the project defined in pyproject.toml.
+    Triggers a GitLab pipeline for the project defined in config.yaml.
 
     Args:
         branch (str, optional): Target git branch. Defaults to current active branch.
@@ -132,16 +146,18 @@ def run_pipeline(branch: str = None, **pipeline_vars):
             "This is required to trigger GitLab pipelines."
         )
 
-    # Grab the global config from pyproject.toml
-    # Passing an empty string or None gets the pure global state without task overrides
-    config = SciCDConfig().workspace_config()
+    # Grab the global config
+    workspace = get_workspace()
 
-    url = config.gitlab_url
-    project_path = config.gitlab_project
+    if not workspace.repository or workspace.repository.platform != "gitlab":
+        raise RuntimeError("Workspace repository is not configured for GitLab.")
 
-    if not project_path:
+    url = workspace.repository.url
+    project_path = workspace.repository.project
+
+    if not project_path or not url:
         raise RuntimeError(
-            "Missing 'gitlab_project' in [tool.scicd] of pyproject.toml."
+            "Missing repository 'url' or 'project' in .scicd/config.yaml"
         )
 
     # Connect to GitLab
@@ -151,7 +167,7 @@ def run_pipeline(branch: str = None, **pipeline_vars):
     except gitlab.exceptions.GitlabGetError as e:
         raise RuntimeError(
             f"Could not find GitLab project: '{project_path}' at {url}.\n"
-            f"Check 'gitlab_project' in pyproject.toml."
+            f"Check repository configuration in .scicd/config.yaml."
         ) from e
 
     # Resolve branch

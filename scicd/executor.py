@@ -1,3 +1,6 @@
+"""
+Module docstring.
+"""
 from pathlib import Path
 import importlib.util
 from typing import Callable, NamedTuple, Iterable
@@ -19,7 +22,7 @@ def register_executor(tags: Iterable[str], name: str = None):
             If `None`, then use function name.
 
     Example:
-        @registuer_executor(tags=["slurm", "sherlock"])
+        @register_executor(tags=["slurm", "sherlock"])
         def slurm(task):
             return {"SLURM_CPUS": str(task.cpu)}
     """
@@ -28,8 +31,9 @@ def register_executor(tags: Iterable[str], name: str = None):
         if name is None:
             name = func.__name__
 
-        # Register this function for each tag
-        ExecutorRegistry().registry[set(tags)] = Executor(name, func)
+        # Register this function for each tag individually
+        for tag in tags:
+            ExecutorRegistry().registry[tag] = Executor(name, func)
         return func
 
     return decorator
@@ -50,8 +54,7 @@ class ExecutorRegistry(Singleton):
 
         if executor_directory.exists() and executor_directory.is_dir():
             for path in executor_directory.iterdir():
-                print(path)
-                if path.is_file():
+                if path.is_file() and path.suffix == ".py":
                     spec = importlib.util.spec_from_file_location(
                         "scicd_user_executors", path
                     )
@@ -60,34 +63,10 @@ class ExecutorRegistry(Singleton):
                         spec.loader.exec_module(module)
                         print(f"Loaded custom executors from {str(path)}")
 
-    def get(self, tags):
+    def get(self, tags: Iterable[str]) -> Executor:
+        """Find the first matching executor for the given tags."""
         for tag in tags:
             if tag in self.registry:
                 return self.registry[tag]
-        raise ValueError("")
+        raise ValueError(f"No executor found matching tags: {tags}")
 
-
-#     def register(self, tags):
-#         def decorator(func):
-#             for tag in tags:
-#                 self._registry[tag] = func
-#             return func
-
-#         return decorator
-
-#     def get(self, task_tags):
-#         for tag in task_tags:
-#             if tag in self._registry:
-#                 return self._registry[tag]
-#         raise ValueError(f"No executor for {task_tags}")
-
-
-# # Global instance
-# executors = ExecutorRegistry()
-# executor = executors.register  # Decorator
-
-
-# # Usage same as before
-# @executor(tags=["slurm"])
-# def my_executor(task):
-#     return {...}

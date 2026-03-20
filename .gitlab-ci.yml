@@ -1,0 +1,17 @@
+default:
+  image: python:3.10
+  before_script:
+  - pip install --upgrade pip
+  - pip install -r requirements.txt
+  - pip install pytest pytest-mock
+  - pip install -e .
+workflow:
+  rules:
+  - if: $CI_PIPELINE_SOURCE == "push"
+stages:
+- stage_0
+RunTests:
+  timeout: 60m
+  stage: stage_0
+  script:
+  - scicd run-luigi --module utils.ci_tasks --family RunTests --params {}

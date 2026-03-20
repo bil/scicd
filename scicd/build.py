@@ -1,185 +1,47 @@
+"""
+Universal Build Entrypoint for SciCD.
+"""
 from __future__ import annotations
-from typing import Dict, List, Tuple
 import importlib
+import dataclasses
+import json
+from copy import deepcopy
+from typing import Dict, List, Tuple, Any
 
 import luigi
+import rich
 from luigi.cmdline_parser import CmdlineParser
 
-from scicd.config import SciCDConfig
+from scicd.config import get_workspace, get_task_config, TaskConfig, WorkspaceConfig, _ConfigManager
 from scicd.dag import DAG, BaseNode, SliceNode, BijectNode
+from scicd.adapter import LuigiAdapter
 
+# =============================================================================
+# FRONTENDS (Target -> DAG)
+# =============================================================================
 
-def luigi2dag(target_task: luigi.Task) -> DAG:
+def luigi2dag(module: str, target: str, **kwargs) -> DAG:
     """
     Orchestrates the conversion of a Luigi task tree into a SciCD DAG.
     """
+    target_task = load_luigi_task(module, target, **kwargs)
+
     # Discover tasks and compute rank (0 is a leaf, N is the target)
-    all_tasks, task_ranks = _discover_and_rank(target_task)
+    all_tasks, task_ranks = _discover_and_rank_luigi(target_task)
 
-    # Group into Node objects (Slice vs Biject)
-    # Returns a map of {luigi_task_id: NodeInstance}
-    task_id_to_node = _group_tasks_into_nodes(all_tasks, task_ranks)
+    # Group tasks into Node objects (Slice vs Biject) using Adapters
+    task_id_to_node = _group_tasks_into_nodes_luigi(all_tasks, task_ranks)
 
-    # Connect the Node objects using the instances themselves
-    # unique_nodes avoids re-processing nodes that contain multiple tasks (Slices)
+    # Connect the Node objects
     unique_nodes = list({id(n): n for n in task_id_to_node.values()}.values())
-    _build_dag_edges(unique_nodes, task_id_to_node)
+    _build_dag_edges_luigi(unique_nodes, task_id_to_node)
 
     # Wrap in a DAG container
     return DAG(nodes=unique_nodes)
 
-
-def _discover_and_rank(
-    target_task: luigi.Task,
-) -> Tuple[Dict[str, luigi.Task], Dict[str, int]]:
-    """
-    Walks the task tree. Returns:
-    - all_tasks: dict[task_id, task_instance]
-    - task_ranks: dict[task_id, int] (topological depth)
-    """
-    all_tasks: Dict[str, luigi.Task] = {}
-
-    # Pass 1: Recursive discovery of all tasks in the tree
-    def find_all(task: luigi.Task):
-        if task.task_id not in all_tasks:
-            all_tasks[task.task_id] = task
-            for dep in luigi.task.flatten(task.requires()):
-                find_all(dep)
-
-    find_all(target_task)
-
-    # Pass 2: Calculate Rank (Topological Depth)
-    task_ranks: Dict[str, int] = {}
-
-    def get_rank(task: luigi.Task) -> int:
-        if task.task_id in task_ranks:
-            return task_ranks[task.task_id]
-
-        deps = luigi.task.flatten(task.requires())
-        if not deps:
-            # Base case: No dependencies means Stage 0
-            rank = 0
-        else:
-            # Recursive case: 1 + max rank of all dependencies
-            rank = max(get_rank(d) for d in deps) + 1
-
-        task_ranks[task.task_id] = rank
-        return rank
-
-    # Trigger the ranking for every discovered task
-    for task_instance in all_tasks.values():
-        get_rank(task_instance)
-
-    return all_tasks, task_ranks
-
-
-def _group_tasks_into_nodes(
-    all_tasks: Dict[str, luigi.Task], task_ranks: Dict[str, int]
-) -> Dict[str, BaseNode]:
-    """
-    Applies SciCDConfig strategies to group tasks into executable Nodes.
-    """
-    task_id_to_node: Dict[str, BaseNode] = {}
-    temp_slices: Dict[Tuple[str, int], SliceNode] = {}
-
-    for tid, task in all_tasks.items():
-        rank = task_ranks[tid]
-        family = task.task_family
-        cfg = SciCDConfig().family_config(family)
-
-        if cfg.concurrency_method == "slice":
-            # Group by family AND rank so tasks from the same family
-            # in different stages don't get mashed together
-            key = (family, rank)
-            if key not in temp_slices:
-                temp_slices[key] = SliceNode(
-                    family=family, tasks=[], rank=rank, task_deps=[]
-                )
-
-            node = temp_slices[key]
-            node.tasks.append(task)
-            task_id_to_node[tid] = node
-        else:
-            # Biject: 1 Node per 1 Task instance
-            node = BijectNode(family=family, tasks=[task], rank=rank, task_deps=[])
-            task_id_to_node[tid] = node
-
-    return task_id_to_node
-
-
-def _build_dag_edges(
-    unique_nodes: List[BaseNode], task_id_to_node: Dict[str, BaseNode]
-):
-    """
-    Translates task-to-task requirements into node-to-node object references.
-    """
-    for node in unique_nodes:
-        # Check every task inside this node
-        for task in node.tasks:
-            # Look at what those tasks require
-            for dep_task in luigi.task.flatten(task.requires()):
-                parent_node = task_id_to_node.get(dep_task.task_id)
-
-                # Ensure the parent is a different node (prevents self-needs in GitLab)
-                if parent_node and parent_node is not node:
-                    if parent_node not in node.task_deps:
-                        node.task_deps.append(parent_node)
-
-
-def build_gitlab(
-    module: str, family: str, yml_filepath: str = ".gitlab-ci.yml", **kwargs
-):
-    """
-    Build a Luigi workflow into CI/CD
-    """
-    task_kwargs = {}
-    scicd_kwargs = {}
-
-    for key, val in kwargs.items():
-        if key.startswith("scicd"):
-            scicd_kwargs[key] = val
-        else:
-            task_kwargs[key] = str(val)
-
-    SciCDConfig().override(**scicd_kwargs) # overrides singleton
-    dag = build_dag(module, family, **task_kwargs)
-
-    # this accesses overrided singleton
-    workspace_config = SciCDConfig().workspace_config()
-    dag.write_gitlab_yaml(
-        filepath=yml_filepath,
-        default=workspace_config.gitlab_default,
-        workflow=workspace_config.gitlab_workflow,
-    )
-
-    print(f"✨ SciCD: DAG generated for {family} with {len(kwargs)} overrides.")
-
-
-def build_dag(module: str, family: str, **kwargs):
-    """
-    Build a Luigi task into its DAG
-    """
-
-    task = load_task(module, family, **kwargs)
-
-    # Now that we have the 'target' task fully loaded with CLI params:
-    dag = luigi2dag(task)
-    return dag
-
-
-def export_dag(module: str, family: str, filepath: str = "dag.dot", **kwargs):
-    """
-    Build a DAG that targets a Luigi task, and generate graphviz dot file.
-    """
-    dag = build_dag(module, family, **kwargs)
-    dag.export_dot(filepath)
-
-
-def load_task(module: str, family: str, **kwargs):
-    """
-    Programmatically loads a task, injecting parameters from luigi.toml.
-    """
-    cmdline_args = ["--module", module, family]
+def load_luigi_task(module: str, target: str, **kwargs) -> luigi.Task:
+    """Programmatically loads a task, injecting parameters."""
+    cmdline_args = ["--module", module, target]
 
     for key, val in kwargs.items():
         # Luigi parser expects dashes
@@ -189,8 +51,177 @@ def load_task(module: str, family: str, **kwargs):
     # Ensure the module is imported so Luigi knows the Task exists
     importlib.import_module(module)
 
-    # This sets CmdlineParser._instance so Task constructors can find it.
+    # Sets CmdlineParser._instance so Task constructors can find it.
     with CmdlineParser.global_instance(cmdline_args) as cp:
         task = cp.get_task_obj()
 
     return task
+
+def _discover_and_rank_luigi(
+    target_task: luigi.Task,
+) -> Tuple[Dict[str, luigi.Task], Dict[str, int]]:
+    """Walks the task tree to discover nodes and rank them topologically."""
+    all_tasks: Dict[str, luigi.Task] = {}
+
+    def find_all(task: luigi.Task):
+        if task.task_id not in all_tasks:
+            all_tasks[task.task_id] = task
+            for dep in luigi.task.flatten(task.requires()):
+                find_all(dep)
+
+    find_all(target_task)
+
+    task_ranks: Dict[str, int] = {}
+
+    def get_rank(task: luigi.Task) -> int:
+        if task.task_id in task_ranks:
+            return task_ranks[task.task_id]
+
+        deps = luigi.task.flatten(task.requires())
+        if not deps:
+            rank = 0
+        else:
+            rank = max(get_rank(d) for d in deps) + 1
+
+        task_ranks[task.task_id] = rank
+        return rank
+
+    for task_instance in all_tasks.values():
+        get_rank(task_instance)
+
+    return all_tasks, task_ranks
+
+def _group_tasks_into_nodes_luigi(
+    all_tasks: Dict[str, luigi.Task], task_ranks: Dict[str, int]
+) -> Dict[str, BaseNode]:
+    """Wraps tasks in Adapters and groups them into Nodes based on ConcurrencyConfig."""
+    task_id_to_node: Dict[str, BaseNode] = {}
+    temp_slices: Dict[Tuple[str, int], SliceNode] = {}
+
+    for tid, task in all_tasks.items():
+        rank = task_ranks[tid]
+        adapter = LuigiAdapter(task)
+
+        # Use the adapter's resolved configuration to determine node type
+        if adapter.cfg.concurrency.method == "slice":
+            key = (adapter.name, rank)
+            if key not in temp_slices:
+                temp_slices[key] = SliceNode(work=[], rank=rank, node_deps=[])
+
+            node = temp_slices[key]
+            node.work.append(adapter)
+            task_id_to_node[tid] = node
+        else:
+            # Biject: 1 Node per Adapter
+            node = BijectNode(work=[adapter], rank=rank, node_deps=[])
+            task_id_to_node[tid] = node
+
+    return task_id_to_node
+
+def _build_dag_edges_luigi(
+    unique_nodes: List[BaseNode], task_id_to_node: Dict[str, BaseNode]
+):
+    """Translates adapter dependencies into Node dependencies."""
+    for node in unique_nodes:
+        for adapter in node.work:
+            for dep_task in luigi.task.flatten(adapter.work.requires()):
+                parent_node = task_id_to_node.get(dep_task.task_id)
+
+                if parent_node and parent_node is not node:
+                    if parent_node not in node.node_deps:
+                        node.node_deps.append(parent_node)
+
+# =============================================================================
+# BACKENDS (DAG -> Output)
+# =============================================================================
+
+def export_gitlab(dag: DAG, filepath: str = ".gitlab-ci.yml", **kwargs):
+    """Renders the abstract DAG into a GitLab CI/CD pipeline."""
+    wspace = get_workspace()
+
+    # Extract workspace boilerplate (default/workflow blocks from scicd.yaml)
+    boilerplate = {}
+    if hasattr(wspace, 'repository') and hasattr(wspace.repository, 'cicd'):
+        if isinstance(wspace.repository.cicd, dict):
+            boilerplate.update(wspace.repository.cicd)
+
+    dag.write_gitlab_yaml(filepath=filepath, **boilerplate)
+
+def export_dot(dag: DAG, filepath: str = "dag.dot", **kwargs):
+    """Exports the DAG to Graphviz for visualization."""
+    dag.export_dot(filepath)
+
+
+# =============================================================================
+# UNIVERSAL BUILD ENTRYPOINT
+# =============================================================================
+
+def build(
+    module: str,
+    target: str,
+    frontend: str = "luigi",
+    backend: str = "gitlab",
+    filepath: str = None,
+    **kwargs
+):
+    """
+    Universal build function.
+    Frontends encode a framework target into an abstract DAG.
+    Backends export the abstract DAG into a target format.
+
+    CLI Argument Namespacing:
+    --------------------------
+    - task_<field>: Overrides fields in TaskConfig (e.g., cpu, memory, tags, image).
+                    These apply globally to every task in the DAG.
+    - workspace_<key>: Blocked. Workspace settings must be set in config files.
+    - <other>:      Passed directly to the frontend (e.g., Luigi task params).
+                    For Luigi, use --TaskName-param val for task-specific params.
+    """
+    task_overrides = {}
+    frontend_params = {}
+
+    # Valid keys for TaskConfig
+    valid_task_keys = {f.name for f in dataclasses.fields(TaskConfig)}
+    # Keys that belong to WorkspaceConfig (we want to block these)
+    workspace_keys = {f.name for f in dataclasses.fields(WorkspaceConfig)}
+
+    for k, v in kwargs.items():
+        # Normalize key to use underscores for comparison (Cyclopts provides dashes)
+        norm_k = k.replace("-", "_")
+        
+        if norm_k.startswith("task_"):
+            key = norm_k[5:]
+            if key in valid_task_keys:
+                task_overrides[key] = v
+            else:
+                rich.print(f"[yellow]Warning:[/yellow] '{key}' is not a valid TaskConfig field. Ignoring.")
+        elif norm_k.startswith("workspace_") or norm_k in workspace_keys:
+            rich.print(f"[bold red]Security Warning:[/bold red] Workspace override '{norm_k}' is not permitted via CLI. Ignoring.")
+        else:
+            frontend_params[k] = v
+
+    # 1. APPLY RUNTIME DEFAULTS
+    if task_overrides:
+        rich.print(f"[bold blue]SciCD:[/bold blue] Applying global TaskConfig overrides: {task_overrides}")
+        _ConfigManager.set_runtime_defaults(task_overrides)
+
+    # 2. FRONTEND
+    if frontend == "luigi":
+        rich.print(f"[bold blue]SciCD:[/bold blue] Initializing Luigi frontend for {module}.{target}")
+        if frontend_params:
+            rich.print(f"  -> Passing params to Luigi: {frontend_params}")
+        dag = luigi2dag(module, target, **frontend_params)
+    else:
+        raise ValueError(f"Unsupported frontend: {frontend}")
+
+    # 3. BACKEND
+    if backend == "gitlab":
+        out_path = filepath or ".gitlab-ci.yml"
+        export_gitlab(dag, out_path)
+        rich.print(f"[bold green]SciCD:[/bold green] Generated GitLab CI pipeline at {out_path}")
+    elif backend == "dot":
+        out_path = filepath or "dag.dot"
+        export_dot(dag, out_path)
+        rich.print(f"[bold green]SciCD:[/bold green] Generated Graphviz DOT file at {out_path}")
+    else:
+        raise ValueError(f"Unsupported backend: {backend}")

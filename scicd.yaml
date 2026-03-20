@@ -1,0 +1,22 @@
+repository:
+  platform: gitlab
+  url: https://gitlab.com
+  project: org/repo
+  cicd:
+    default:
+      image: python:3.10
+      before_script:
+        - pip install --upgrade pip
+        - pip install -r requirements.txt
+        - pip install pytest pytest-mock
+        - pip install -e .
+    workflow:
+      rules:
+        - if: '$CI_PIPELINE_SOURCE == "push"'
+remote:
+  protocol: rclone
+  url: ./remote_mock
+  root: .
+task:
+  cpu: 1
+  memory: 4Gi

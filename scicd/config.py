@@ -1,10 +1,13 @@
+"""
+Module docstring.
+"""
+
 import re
 
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Union, Literal, Tuple
 from types import SimpleNamespace
-from dataclasses import dataclass, field, asdict
-from abc import ABC
+from dataclasses import dataclass, field, fields, asdict
 
 
 import yaml
@@ -95,14 +98,15 @@ class QueueConfig:
             raise ValueError(
                 f"Currently only 'gcp' platform is supported for queues, got '{self.platform}'"
             )
-
-        if not self.topic:
-            raise ValueError("queue.topic cannot be empty")
-        if not self.subscription:
-            raise ValueError("queue.subscription cannot be empty")
+        else:
+            if not self.topic:
+                raise ValueError("queue.topic cannot be empty")
+            if not self.subscription:
+                raise ValueError("queue.subscription cannot be empty")
 
 
 @dataclass
+# pylint: disable=too-many-instance-attributes
 class TaskConfig:
     """
     Unified configuration for a single task within SciCD.
@@ -130,6 +134,11 @@ class TaskConfig:
     RAM allocation.
     Supported units: K/Ki, M/Mi, G/Gi, T/Ti (with optional 'B' suffix).
     Default: '8Gi'.
+    """
+
+    image: Optional[str] = None
+    """
+    Container image to use for this task.
     """
 
     disk: Optional[str] = None
@@ -328,7 +337,7 @@ class TaskConfig:
     def validate_memory(cls, mem: Union[int, str]) -> str:
         """Check if memory string has valid format."""
         if isinstance(mem, int):
-            return f"{mem}M"
+            return f"{mem}Mi"
         if mem is None:
             return mem
         mem = mem.strip()
@@ -423,6 +432,7 @@ class TaskConfig:
         Create a new TaskConfig with overrides applied.
 
         Handles nested merging for concurrency and queue configs.
+        Also handles type conversion for string values coming from the CLI.
 
         Args:
             overrides: Dictionary of fields to override
@@ -431,8 +441,24 @@ class TaskConfig:
             New TaskConfig instance with merged values
         """
         current = asdict(self)
-        overrides = overrides.copy()
-        out = deep_update(current, overrides)
+        fields_map = {f.name: f.type for f in fields(self)}
+
+        # Cast strings from CLI to correct types in the overrides dict
+        casted_overrides = overrides.copy()
+        for k, v in casted_overrides.items():
+            if k in fields_map:
+                target_type = fields_map[k]
+                try:
+                    if target_type == int or target_type == Optional[int]:
+                        casted_overrides[k] = int(v)
+                    elif target_type == float or target_type == Optional[float]:
+                        casted_overrides[k] = float(v)
+                    elif target_type == bool or target_type == Optional[bool]:
+                        casted_overrides[k] = str(v).lower() in ("true", "1", "yes")
+                except (ValueError, TypeError):
+                    pass
+
+        out = deep_update(current, casted_overrides)
         return TaskConfig(**out)
 
 
@@ -552,26 +578,8 @@ class RepositoryConfig:
             raise ValueError("repository.project is mandatory")
 
 
-class Singleton(ABC):
-    _instance = None
-    _initialized = None
-
-    def __new__(cls, **kwargs):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
-
-    def __init__(self, **kwargs):
-        if not self._initialized:
-            self._first_init(**kwargs)
-            self.__class__._initialized = True
-
-    def _first_init(self, **kwargs):
-        pass
-
-
 @dataclass
-class WorkspaceConfig(Singleton):
+class WorkspaceConfig:
     """
     Root configuration for a SciCD project workspace.
 
@@ -619,22 +627,61 @@ class WorkspaceConfig(Singleton):
 # ================================== HELPERS =================================
 
 
-def load_config(config_path: str = ".scicd/config.yaml") -> Dict[str, Any]:
+def find_config_path() -> Path:
     """
-    Load configuration from YAML file.
+    Search for the SciCD configuration file in prioritized order.
 
-    Args:
-        config_path: Path to config file (default: .scicd/config.yaml)
+    Priority:
+    1. Environment Variable: SCICD_CONFIG_PATH
+    2. Root scicd.yaml
+    3. .scicd/config.yaml
+    4. .scicd/scicd.yaml
 
     Returns:
-        Raw configuration dictionary
+        Path object to the found configuration file.
 
     Raises:
-        FileNotFoundError: If config file doesn't exist
+        FileNotFoundError: If no configuration file is found in any standard location.
     """
-    path = Path(config_path)
+    import os
+    # 1. Environment Variable
+    env_path = os.getenv("SCICD_CONFIG_PATH")
+    if env_path:
+        p = Path(env_path)
+        if p.exists():
+            return p
+        raise FileNotFoundError(f"Config file specified in SCICD_CONFIG_PATH not found: {env_path}")
+
+    # 2. Standard Locations
+    candidates = [
+        "scicd.yaml",
+        ".scicd/config.yaml",
+        ".scicd/scicd.yaml",
+    ]
+
+    for c in candidates:
+        p = Path(c)
+        if p.exists():
+            return p
+
+    raise FileNotFoundError(
+        "SciCD configuration file not found. "
+        "Create 'scicd.yaml' or '.scicd/config.yaml' in your project root."
+    )
+
+
+def load_config(config_path: Optional[Union[str, Path]] = None) -> Dict[str, Any]:
+    """
+    Load configuration from YAML file.
+    If no path is provided, it uses discovery logic.
+    """
+    if config_path is None:
+        path = find_config_path()
+    else:
+        path = Path(config_path)
+
     if not path.exists():
-        raise FileNotFoundError(f"Config file not found: {config_path}")
+        raise FileNotFoundError(f"Config file not found: {path}")
 
     with open(path, encoding="utf-8") as f:
         config = yaml.safe_load(f)
@@ -652,18 +699,25 @@ class _ConfigManager:
     def get_workspace(cls) -> WorkspaceConfig:
         """Get workspace singleton."""
         if cls._workspace is None:
-            config_dict = load_config(".scicd/config.yaml")
-            cls._workspace = WorkspaceConfig(**config_dict)
+            config_dict = load_config()
+            # The 'task' key provides defaults for TaskConfig, not WorkspaceConfig.
+            ws_dict = {k: v for k, v in config_dict.items() if k != "task"}
+            cls._workspace = WorkspaceConfig(**ws_dict)
         return cls._workspace
 
     @classmethod
     def get_base_task_config(cls) -> TaskConfig:
         """Get base task config singleton (defaults from task: section)."""
         if cls._base_task_config is None:
-            config_dict = load_config(".scicd/config.yaml")
+            config_dict = load_config()
             task_dict = config_dict.get("task", {})
             cls._base_task_config = TaskConfig(**task_dict)
         return cls._base_task_config
+
+    @classmethod
+    def set_runtime_defaults(cls, overrides: Dict[str, Any]):
+        """Inject global overrides that apply to all TaskConfig instances."""
+        cls._base_task_config = cls.get_base_task_config().merge(overrides)
 
     @classmethod
     def reset(cls):
@@ -733,7 +787,12 @@ def reset_config():
     _ConfigManager.reset()
 
 
-def cascading_config_from_file(filepath: str | Path, **kwargs) -> dict:
+def cascading_config(
+    filepath: str | Path,
+    config_key: str = "config",
+    override_key: str = "override",
+    **kwargs,
+) -> dict:
     """
     Load a YAML file and apply cascading config logic based on kwargs.
 
@@ -752,8 +811,8 @@ def cascading_config_from_file(filepath: str | Path, **kwargs) -> dict:
 
     cfg = load_yaml(path)
 
-    config = cfg.get("config", {})
-    override = cfg.get("override", [])
+    config = cfg.get(config_key, {})
+    override = cfg.get(override_key, [])
 
     return cascade(config, override, **kwargs)
 

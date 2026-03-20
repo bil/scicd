@@ -23,59 +23,91 @@ sys.path.insert(0, os.getcwd())
 
 
 @app.command()
-def build_gitlab(
-    module: Annotated[
-        str,
-        Parameter(
-            help="The Python module containing the Task target.", group="Required"
-        ),
-    ],
-    family: Annotated[str, Parameter(help="The Luigi Task family.", group="Required")],
-    yml_filepath: Annotated[
-        str, Parameter(help="Output path for the YAML generated file.")
-    ] = ".gitlab-ci.yml",
-    **overrides: Annotated[
-        str,  # Annotated as str so Cyclopts parses --key val pairs correctly
-        Parameter(
-            help="Dynamic overrides for Luigi params, SciCD config, or GitLab boilerplate (e.g., --cpu 4 --project $CI_PROJECT_PATH)",
-            group="Overrides",
-        ),
-    ],
+def run_luigi(
+    module: Annotated[str, Parameter(help="The Python module containing the Task class.")],
+    family: Annotated[str, Parameter(help="The Luigi task class name (family).")],
+    params: Annotated[str, Parameter(help="JSON string of task parameters.")],
 ):
     """
-    Compiles a Luigi DAG into a valid .gitlab-ci.yml file.
-
-    This command resolves dependencies, calculates ranks, and maps tasks to GitLab stages.
-    Any extra flags are passed as top-level boilerplate to the CI configuration.
+    Worker entrypoint to execute a single Luigi task.
+    Used by CI jobs to run the actual work unit.
     """
-    scicd.build.build_gitlab(
-        module=module, family=family, yml_filepath=yml_filepath, **overrides
-    )
+    import importlib
+    import json
+    import luigi
+
+    # 1. Dynamically import the module
+    try:
+        mod = importlib.import_module(module)
+    except ImportError as e:
+        rich.print(f"[bold red]Error:[/bold red] Could not find module '{module}'")
+        sys.exit(1)
+
+    # 2. Get the task class from the module
+    try:
+        task_cls = getattr(mod, family)
+    except AttributeError:
+        rich.print(f"[bold red]Error:[/bold red] Module '{module}' has no class named '{family}'")
+        sys.exit(1)
+
+    # 3. Parse parameters
+    try:
+        param_dict = json.loads(params)
+    except json.JSONDecodeError:
+        rich.print(f"[bold red]Error:[/bold red] Invalid JSON provided for params: {params}")
+        sys.exit(1)
+
+    # 4. Instantiate and Execute via Luigi
+    try:
+        task_instance = task_cls.from_str_params(param_dict)
+    except Exception as e:
+        rich.print(f"[bold red]Error:[/bold red] Could not instantiate task '{family}' with params {param_dict}")
+        print(str(e))
+        sys.exit(1)
+
+    rich.print(f"[bold blue]Executing Luigi Task:[/bold blue] {module}.{family}")
+    rich.print(f"[bold blue]Parameters:[/bold blue] {param_dict}")
+
+    # 5. Run the task
+    success = luigi.build([task_instance], local_scheduler=True)
+
+    if not success:
+        rich.print(f"[bold red]Error:[/bold red] Luigi execution failed for {family}.")
+        sys.exit(1)
 
 
 @app.command()
-def export_dag(
+def build(
     module: Annotated[
-        str, Parameter(help="The Python module containing the DAG.", group="Required")
+        str, Parameter(help="The Python module containing the target.", group="Required")
     ],
-    family: Annotated[
-        str, Parameter(help="The base Luigi task family.", group="Required")
+    target: Annotated[
+        str, Parameter(help="The target class/family.", group="Required")
     ],
+    frontend: Annotated[
+        str, Parameter(help="Frontend to parse the DAG (e.g. luigi)")
+    ] = "luigi",
+    backend: Annotated[
+        str, Parameter(help="Backend to render the DAG (e.g. gitlab, dot)")
+    ] = "gitlab",
     filepath: Annotated[
-        str, Parameter(help="Output path for the Graphviz .dot file.")
-    ] = "dag.dot",
-    **overrides: Annotated[
-        str,
-        Parameter(
-            help="Config overrides used during DAG generation.", group="Overrides"
-        ),
+        Optional[str], Parameter(help="Output path for the generated file.")
+    ] = None,
+    **kwargs: Annotated[
+        str, Parameter(help="Dynamic overrides", group="Overrides")
     ],
 ):
     """
-    Exports the task dependency graph to a DOT file for visualization.
-    Useful for verifying 'needs' logic before committing to GitLab.
+    Compiles a target into a CI/CD pipeline or visualization.
     """
-    scicd.build.export_dag(module=module, family=family, filepath=filepath, **overrides)
+    scicd.build.build(
+        module=module,
+        target=target,
+        frontend=frontend,
+        backend=backend,
+        filepath=filepath,
+        **kwargs
+    )
 
 
 @app.command()
@@ -117,17 +149,23 @@ def config(
     ],
 ):
     """
-    Inspects the resolved configuration for a specific task family.
-    Prints the merged result of default, workspace, and family-level configs.
+    Inspects the global and task-level configuration.
+    Prints the loaded config state.
     """
-    result = scicd.config.SciCDConfig(**overrides)
-    rich.print(result.config_dict)
+    import dataclasses
+    workspace = scicd.config.get_workspace()
+    task_cfg = scicd.config.get_task_config(**overrides)
+
+    rich.print("[bold green]Workspace Config:[/bold green]")
+    rich.print(dataclasses.asdict(workspace))
+    rich.print("\n[bold green]Task Config (with overrides):[/bold green]")
+    rich.print(dataclasses.asdict(task_cfg))
 
 
 @app.command()
 def config_key(
     key: Annotated[
-        str, Parameter(help="The dot-notated key to retrieve (e.g. All.samples)")
+        str, Parameter(help="The dot-notated key to retrieve from workspace or task config (e.g. task.cpu)")
     ],
     **overrides: Annotated[
         str,
@@ -140,8 +178,15 @@ def config_key(
     Extracts a specific value from the configuration using a key path.
     Useful for shell scripts and CI/CD variables.
     """
-    cfg = scicd.config.SciCDConfig(**overrides)
-    data = cfg.config_dict
+    import dataclasses
+    workspace_dict = dataclasses.asdict(scicd.config.get_workspace())
+    task_dict = dataclasses.asdict(scicd.config.get_task_config(**overrides))
+
+    # Create a unified dictionary for querying
+    data = {
+        "workspace": workspace_dict,
+        "task": task_dict
+    }
 
     # Traverse the dictionary using the dot-separated key
     try:
@@ -157,25 +202,24 @@ def config_key(
 
     except (KeyError, TypeError) as e:
         rich.print(
-            f"[bold red]Error:[/bold red] Key '{key}' not found in configuration."
+            f"[bold red]Error:[/bold red] Key '{key}' not found in configuration. Start with 'workspace.' or 'task.'."
         )
         raise SystemExit(1) from e
 
 
 @app.command()
 def config_task(
-    family: Annotated[Optional[str], Parameter(help="Task family to inspect.")] = None,
     **overrides: Annotated[
         str,
         Parameter(help="Runtime overrides to apply to the config.", group="Overrides"),
     ],
 ):
     """
-    Inspects the resolved configuration for a specific task family.
-    Prints the merged result of default, workspace, and family-level configs.
+    Inspects the resolved task configuration.
     """
-    result = scicd.config.get_family(family=family, **overrides)
-    rich.print(result)
+    import dataclasses
+    result = scicd.config.get_task_config(**overrides)
+    rich.print(dataclasses.asdict(result))
 
 
 @app.command()

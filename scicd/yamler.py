@@ -123,5 +123,13 @@ def load_yaml(path: str, **kwargs: Any) -> Dict[str, Any]:
 
 
 
+def slugify(text: str) -> str:
+    # Replace anything that isn't a letter, number, or underscore with '_'
+    # This handles periods, dashes, spaces, and weird symbols in one pass.
+    clean = re.sub(r"[^a-zA-Z0-9_]", "_", text)
+    # Collapse multiple underscores (e.g., 'a...b' -> 'a___b' -> 'a_b')
+    return re.sub(r"_+", "_", clean).strip("_")
+
+
 if __name__ == "__main__":
     fire.Fire()

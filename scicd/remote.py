@@ -1,3 +1,6 @@
+"""
+Remote syncing utilities for SciCD.
+"""
 import os
 import subprocess
 import tempfile
@@ -36,11 +39,15 @@ def push(
         python3 -m scicd.remote push results/plot.png results/data.csv
     """
     wspace = scicd.config.get_workspace()
-    protocol = wspace.remote_protocol
+
+    if not wspace.remote:
+        return True
+
+    protocol = wspace.remote.protocol
 
     if protocol == "rclone":
         return _rclone_batch(wspace, list(files), "push")
-    elif protocol == "https":
+    if protocol == "https":
         return _https_batch(wspace, list(files), "push")
 
     raise ValueError(f"Unsupported protocol for push: {protocol}")
@@ -65,11 +72,15 @@ def pull(
         python3 -m scicd.remote pull results/raw_data.fits
     """
     wspace = scicd.config.get_workspace()
-    protocol = wspace.remote_protocol
+
+    if not wspace.remote:
+        return True
+
+    protocol = wspace.remote.protocol
 
     if protocol == "rclone":
         return _rclone_batch(wspace, list(files), "pull")
-    elif protocol == "https":
+    if protocol == "https":
         return _https_batch(wspace, list(files), "pull")
 
     raise ValueError(f"Unsupported protocol for pull: {protocol}")
@@ -85,15 +96,16 @@ def pull_full() -> bool:
     persistent storage with existing baseline data.
     """
     wspace = scicd.config.get_workspace()
-    protocol = getattr(wspace, "remote_protocol", "rclone")
 
-    if not wspace.path_remote:
+    if not wspace.remote or not wspace.remote.url or not wspace.remote.root:
         print("No remote path configured. Skipping pull-full.")
         return True
 
+    protocol = wspace.remote.protocol
+
     if protocol == "rclone":
-        flags = " ".join(wspace.rclone_flags)
-        cmd = f"rclone copy {wspace.path_remote} {wspace.path_output} {flags}"
+        flags = " ".join(wspace.remote.flags)
+        cmd = f"rclone copy {wspace.remote.url} {wspace.remote.root} {flags}"
         subprocess.check_call(cmd, shell=True)
         return True
 
@@ -107,17 +119,17 @@ def _https_batch(
     wspace: scicd.config.WorkspaceConfig, files: List[Path], direction="push"
 ) -> bool:
     """HTTPS implementation using requests Session for connection pooling."""
-    if not files or not wspace.path_remote:
+    if not wspace.remote or not files or not wspace.remote.url or not wspace.remote.root:
         return True
 
-    local_root = Path(wspace.path_output)
-    base_url = wspace.path_remote.rstrip("/")
+    local_root = Path(wspace.remote.root)
+    base_url = wspace.remote.url.rstrip("/")
 
     # Use a session to reuse the TCP connection for multiple files
     with requests.Session() as session:
         # Add auth if your workspace config provides it
-        if wspace.https_header:
-            session.headers.update(wspace.https_header)
+        if getattr(wspace, "https_header", None):
+            session.headers.update(getattr(wspace, "https_header"))
 
         for local_p in files:
             try:
@@ -129,11 +141,11 @@ def _https_batch(
                         continue
                     with open(local_p, "rb") as f:
                         # We use PUT here as it's the standard for 'copyto' behavior
-                        response = session.put(url, data=f)
+                        response = session.put(url, data=f, timeout=60)
                         response.raise_for_status()
                 else:
                     # Direction is PULL
-                    response = session.get(url, stream=True)
+                    response = session.get(url, stream=True, timeout=60)
                     if response.status_code == 404:
                         return False  # Fail early if a required file is missing
                     response.raise_for_status()
@@ -153,13 +165,12 @@ def _https_batch(
 def _rclone_batch(
     wspace: scicd.config.WorkspaceConfig, files: List[Path], direction="push"
 ) -> bool:
-    # ... (Your existing rclone logic stays exactly the same) ...
-    if not files or not wspace.path_remote:
+    if not wspace.remote or not files or not wspace.remote.url or not wspace.remote.root:
         return True
 
-    flags = " ".join(wspace.rclone_flags)
-    local_root = Path(wspace.path_output)
-    remote_root = Path(wspace.path_remote)
+    flags = " ".join(wspace.remote.flags)
+    local_root = Path(wspace.remote.root)
+    remote_root = wspace.remote.url
 
     rel_paths = []
     for f in files:
