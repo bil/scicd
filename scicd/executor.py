@@ -1,6 +1,7 @@
 """
 Module docstring.
 """
+
 from pathlib import Path
 import importlib.util
 from typing import Callable, NamedTuple, Iterable
@@ -69,4 +70,3 @@ class ExecutorRegistry(Singleton):
             if tag in self.registry:
                 return self.registry[tag]
         raise ValueError(f"No executor found matching tags: {tags}")
-

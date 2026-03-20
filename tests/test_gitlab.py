@@ -36,7 +36,7 @@ class MockAdapter(BaseAdapter):
 def test_gitlab_yml_lint_and_json_params(tmp_path):
     """
     Verifies the syntactic validity and parameter integrity of generated GitLab YAML.
-    
+
     This test:
     1. Generates a .gitlab-ci.yml file from a BijectNode.
     2. Uses PyYAML to load and lint the generated file.
@@ -72,7 +72,7 @@ def test_gitlab_yml_lint_and_json_params(tmp_path):
 def test_slice_node_child_yml_generation(tmp_path, mocker):
     """
     Verifies that SliceNode correctly generates child pipeline configurations.
-    
+
     This test confirms that:
     1. The parent pipeline contains a generator job with the correct scicd.slice command.
     2. The scicd.slice logic generates a valid child YAML configuration.

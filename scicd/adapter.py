@@ -1,6 +1,7 @@
 """
 Module docstring.
 """
+
 import json
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List
@@ -53,7 +54,6 @@ class BaseAdapter(ABC):
     @abstractmethod
     def identifier(self) -> str:
         """Return a unique, deterministic identifier for this work unit."""
-
 
 
 class LuigiAdapter(BaseAdapter):
@@ -130,7 +130,7 @@ class LuigiAdapter(BaseAdapter):
                 resources = resources()
             except TypeError:
                 pass
-        
+
         if isinstance(resources, dict):
             overrides = deep_update(
                 overrides, self._normalize_luigi_resources(resources)

@@ -24,8 +24,8 @@ class MyMockTask(HashTask):
 def test_hash_task_properties(mocker):
     """
     Verifies the fundamental properties of a HashTask.
-    
-    Checks that output paths are correctly derived from the workspace root 
+
+    Checks that output paths are correctly derived from the workspace root
     and that fingerprints include code commit, parameters, and configuration.
     """
     mocker.patch("scicd.task.get_git_commit", return_value="abc1234")
@@ -47,7 +47,7 @@ def test_hash_task_properties(mocker):
 def test_hash_task_complete(mocker, tmp_path):
     """
     Verifies the fingerprint-based completion logic of HashTask.
-    
+
     A task is only considered complete if:
     1. The output file exists.
     2. A corresponding fingerprint file exists.
@@ -85,7 +85,7 @@ def test_hash_task_complete(mocker, tmp_path):
 def test_event_handlers(mocker, tmp_path):
     """
     Verifies that task event handlers perform their side effects correctly.
-    
+
     - _ensure_output_dirs must create the parent directories for outputs.
     - _checkpoint_task must write the fingerprint file upon success.
     """
@@ -113,9 +113,9 @@ def test_event_handlers(mocker, tmp_path):
 def test_global_pull_push(mocker):
     """
     Verifies the global pull/push triggers for generic Luigi tasks.
-    
-    Ensures that when remote syncing is enabled, any task entering START 
-    will trigger a pull of its inputs, and any task reaching SUCCESS 
+
+    Ensures that when remote syncing is enabled, any task entering START
+    will trigger a pull of its inputs, and any task reaching SUCCESS
     will trigger a push of its outputs.
     """
     mock_ws = mocker.MagicMock()

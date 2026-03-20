@@ -1,6 +1,7 @@
 """
 Luigi tasks for SciCD pipeline.
 """
+
 import json
 import hashlib
 from functools import cached_property

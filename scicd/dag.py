@@ -1,6 +1,7 @@
 """
 Module docstring.
 """
+
 from __future__ import annotations  # Put this at the very top of your file
 from copy import deepcopy
 import json

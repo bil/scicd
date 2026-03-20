@@ -1,6 +1,7 @@
 """
 Remote syncing utilities for SciCD.
 """
+
 import os
 import subprocess
 import tempfile
@@ -119,7 +120,12 @@ def _https_batch(
     wspace: scicd.config.WorkspaceConfig, files: List[Path], direction="push"
 ) -> bool:
     """HTTPS implementation using requests Session for connection pooling."""
-    if not wspace.remote or not files or not wspace.remote.url or not wspace.remote.root:
+    if (
+        not wspace.remote
+        or not files
+        or not wspace.remote.url
+        or not wspace.remote.root
+    ):
         return True
 
     local_root = Path(wspace.remote.root)
@@ -165,7 +171,12 @@ def _https_batch(
 def _rclone_batch(
     wspace: scicd.config.WorkspaceConfig, files: List[Path], direction="push"
 ) -> bool:
-    if not wspace.remote or not files or not wspace.remote.url or not wspace.remote.root:
+    if (
+        not wspace.remote
+        or not files
+        or not wspace.remote.url
+        or not wspace.remote.root
+    ):
         return True
 
     flags = " ".join(wspace.remote.flags)

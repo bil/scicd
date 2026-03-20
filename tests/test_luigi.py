@@ -53,7 +53,7 @@ class RootTask(HashTask):
 def test_luigi_lifecycle_and_events(mocker, tmp_path):
     """
     Verifies that the full Luigi execution lifecycle correctly triggers SciCD events.
-    
+
     This test runs a real Luigi task tree and asserts that:
     1. _pull_inputs_on_start is triggered (mock_pull).
     2. _push_outputs_on_success is triggered (mock_push).
@@ -98,7 +98,7 @@ def test_luigi_lifecycle_and_events(mocker, tmp_path):
 def test_luigi_dag_resolution(mocker):
     """
     Verifies that a Luigi task tree is correctly converted into an abstract SciCD DAG.
-    
+
     This test mocks the Luigi module loading and command-line parsing to simulate
     loading a 'RootTask'. It then asserts that the resulting DAG has the expected
     number of nodes, topological ranks, and parent-child dependencies.

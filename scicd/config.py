@@ -644,13 +644,16 @@ def find_config_path() -> Path:
         FileNotFoundError: If no configuration file is found in any standard location.
     """
     import os
+
     # 1. Environment Variable
     env_path = os.getenv("SCICD_CONFIG_PATH")
     if env_path:
         p = Path(env_path)
         if p.exists():
             return p
-        raise FileNotFoundError(f"Config file specified in SCICD_CONFIG_PATH not found: {env_path}")
+        raise FileNotFoundError(
+            f"Config file specified in SCICD_CONFIG_PATH not found: {env_path}"
+        )
 
     # 2. Standard Locations
     candidates = [

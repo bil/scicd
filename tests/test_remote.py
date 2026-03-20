@@ -8,8 +8,8 @@ from scicd.config import WorkspaceConfig, RemoteConfig
 def test_remote_pull_full_rclone(mocker):
     """
     Verifies that the global full-sync command correctly calls rclone.
-    
-    This test ensures that 'scicd.remote pull-full' properly translates the 
+
+    This test ensures that 'scicd.remote pull-full' properly translates the
     WorkspaceConfig into a valid system-level 'rclone copy' command.
     """
     ws = WorkspaceConfig(
@@ -33,7 +33,7 @@ def test_remote_pull_full_rclone(mocker):
 def test_remote_pull_full_unsupported(mocker):
     """
     Verifies that pull-full fails gracefully for unsupported protocols.
-    
+
     Currently, complete directory synchronization is only implemented for rclone.
     HTTPS protocols are limited to surgical, file-by-file pulls.
     """
@@ -50,9 +50,9 @@ def test_remote_pull_full_unsupported(mocker):
 def test_remote_push_rclone(mocker):
     """
     Verifies surgical file-by-file pushes via rclone.
-    
-    This test asserts that when multiple files are pushed, SciCD correctly 
-    filters those that belong to the workspace root and passes them to 
+
+    This test asserts that when multiple files are pushed, SciCD correctly
+    filters those that belong to the workspace root and passes them to
     rclone via the --files-from manifest protocol.
     """
     ws = WorkspaceConfig(
@@ -84,7 +84,7 @@ def test_remote_push_out_of_root(mocker):
 
     # Path outside /data
     out_path = Path("/tmp/outside.txt")
-    
+
     # This should return True (no error) but NOT call subprocess
     assert scicd.remote.push(out_path) is True
     assert mock_sub.call_count == 0
@@ -93,7 +93,7 @@ def test_remote_push_out_of_root(mocker):
 def test_remote_pull_https(mocker, tmp_path):
     """
     Verifies surgical file-by-file pulls via the HTTPS protocol.
-    
+
     This test mocks a web session and asserts that:
     1. Requests are made to the correct REST API endpoint (URL mapping).
     2. Downloaded content is correctly streamed and written to the local filesystem.

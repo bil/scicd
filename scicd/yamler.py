@@ -34,6 +34,7 @@ def yml_suffix(path: str) -> str:
 
     return path + ".yaml"
 
+
 def expand_vars(data: T) -> T:
     """
     Recursively expands environment variables in strings.
@@ -120,7 +121,6 @@ def load_yaml(path: str, **kwargs: Any) -> Dict[str, Any]:
     data: Dict[str, Any] = yaml.safe_load(rendered) or {}
 
     return expand_vars(data)
-
 
 
 def slugify(text: str) -> str:

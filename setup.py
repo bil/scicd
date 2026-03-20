@@ -14,7 +14,7 @@ setup(
         "Jinja2>=3.1.2",
         "cyclopts>=4.10.0",
         "tomli>=2.0.1",
-        "rich>=13.7.1"
+        "rich>=13.7.1",
     ],
     entry_points={
         "console_scripts": [

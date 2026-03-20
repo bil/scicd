@@ -23,7 +23,7 @@ SciCD is built on a modular architecture that separates the source of your workf
 
 ### Frontends
 
-A **Frontend** is responsible for parsing a workflow definition and converting it into SciCD's abstract Directed Acyclic Graph (DAG). 
+A **Frontend** is responsible for parsing a workflow definition and converting it into SciCD's abstract Directed Acyclic Graph (DAG).
 
 Currently, **Luigi** is the primary supported frontend.
 
@@ -33,11 +33,13 @@ Currently, **Luigi** is the primary supported frontend.
 | **Snakemake** | `--frontend snakemake` | *Planned* |
 
 #### Luigi Frontend Details
+
 When using the Luigi frontend, SciCD:
-1.  Imports your Python module.
-2.  Instantiates your target task class.
-3.  Recursively discovers all dependencies.
-4.  Maps each Luigi task instance into an abstract `BijectNode` or `SliceNode`.
+
+1. Imports your Python module.
+2. Instantiates your target task class.
+3. Recursively discovers all dependencies.
+4. Maps each Luigi task instance into an abstract `BijectNode` or `SliceNode`.
 
 ### Backends
 
@@ -47,7 +49,7 @@ A **Backend** takes the abstract DAG and renders it into a specific output forma
 | :--- | :--- | :--- |
 | **GitLab** | `--backend gitlab` | Production Ready |
 | **Graphviz** | `--backend dot` | Visual Debugging |
-| **GitHub Actions**| `--backend github` | *Planned* |
+| **GitHub Actions** | `--backend github` | *Planned* |
 
 ## Turning a Workflow into GitLab CI/CD
 

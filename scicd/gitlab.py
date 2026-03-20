@@ -1,6 +1,7 @@
 """
 Module docstring.
 """
+
 import os
 from pathlib import Path
 

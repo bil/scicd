@@ -24,7 +24,9 @@ sys.path.insert(0, os.getcwd())
 
 @app.command()
 def run_luigi(
-    module: Annotated[str, Parameter(help="The Python module containing the Task class.")],
+    module: Annotated[
+        str, Parameter(help="The Python module containing the Task class.")
+    ],
     family: Annotated[str, Parameter(help="The Luigi task class name (family).")],
     params: Annotated[str, Parameter(help="JSON string of task parameters.")],
 ):
@@ -47,21 +49,27 @@ def run_luigi(
     try:
         task_cls = getattr(mod, family)
     except AttributeError:
-        rich.print(f"[bold red]Error:[/bold red] Module '{module}' has no class named '{family}'")
+        rich.print(
+            f"[bold red]Error:[/bold red] Module '{module}' has no class named '{family}'"
+        )
         sys.exit(1)
 
     # 3. Parse parameters
     try:
         param_dict = json.loads(params)
     except json.JSONDecodeError:
-        rich.print(f"[bold red]Error:[/bold red] Invalid JSON provided for params: {params}")
+        rich.print(
+            f"[bold red]Error:[/bold red] Invalid JSON provided for params: {params}"
+        )
         sys.exit(1)
 
     # 4. Instantiate and Execute via Luigi
     try:
         task_instance = task_cls.from_str_params(param_dict)
     except Exception as e:
-        rich.print(f"[bold red]Error:[/bold red] Could not instantiate task '{family}' with params {param_dict}")
+        rich.print(
+            f"[bold red]Error:[/bold red] Could not instantiate task '{family}' with params {param_dict}"
+        )
         print(str(e))
         sys.exit(1)
 
@@ -79,7 +87,8 @@ def run_luigi(
 @app.command()
 def build(
     module: Annotated[
-        str, Parameter(help="The Python module containing the target.", group="Required")
+        str,
+        Parameter(help="The Python module containing the target.", group="Required"),
     ],
     target: Annotated[
         str, Parameter(help="The target class/family.", group="Required")
@@ -93,9 +102,7 @@ def build(
     filepath: Annotated[
         Optional[str], Parameter(help="Output path for the generated file.")
     ] = None,
-    **kwargs: Annotated[
-        str, Parameter(help="Dynamic overrides", group="Overrides")
-    ],
+    **kwargs: Annotated[str, Parameter(help="Dynamic overrides", group="Overrides")],
 ):
     """
     Compiles a target into a CI/CD pipeline or visualization.
@@ -106,7 +113,7 @@ def build(
         frontend=frontend,
         backend=backend,
         filepath=filepath,
-        **kwargs
+        **kwargs,
     )
 
 
@@ -153,6 +160,7 @@ def config(
     Prints the loaded config state.
     """
     import dataclasses
+
     workspace = scicd.config.get_workspace()
     task_cfg = scicd.config.get_task_config(**overrides)
 
@@ -165,7 +173,10 @@ def config(
 @app.command()
 def config_key(
     key: Annotated[
-        str, Parameter(help="The dot-notated key to retrieve from workspace or task config (e.g. task.cpu)")
+        str,
+        Parameter(
+            help="The dot-notated key to retrieve from workspace or task config (e.g. task.cpu)"
+        ),
     ],
     **overrides: Annotated[
         str,
@@ -179,14 +190,12 @@ def config_key(
     Useful for shell scripts and CI/CD variables.
     """
     import dataclasses
+
     workspace_dict = dataclasses.asdict(scicd.config.get_workspace())
     task_dict = dataclasses.asdict(scicd.config.get_task_config(**overrides))
 
     # Create a unified dictionary for querying
-    data = {
-        "workspace": workspace_dict,
-        "task": task_dict
-    }
+    data = {"workspace": workspace_dict, "task": task_dict}
 
     # Traverse the dictionary using the dot-separated key
     try:
@@ -218,6 +227,7 @@ def config_task(
     Inspects the resolved task configuration.
     """
     import dataclasses
+
     result = scicd.config.get_task_config(**overrides)
     rich.print(dataclasses.asdict(result))
 

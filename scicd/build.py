@@ -1,24 +1,29 @@
 """
 Universal Build Entrypoint for SciCD.
 """
+
 from __future__ import annotations
 import importlib
 import dataclasses
-import json
-from copy import deepcopy
-from typing import Dict, List, Tuple, Any
+from typing import Dict, List, Tuple
 
 import luigi
 import rich
 from luigi.cmdline_parser import CmdlineParser
 
-from scicd.config import get_workspace, get_task_config, TaskConfig, WorkspaceConfig, _ConfigManager
+from scicd.config import (
+    get_workspace,
+    TaskConfig,
+    WorkspaceConfig,
+    _ConfigManager,
+)
 from scicd.dag import DAG, BaseNode, SliceNode, BijectNode
 from scicd.adapter import LuigiAdapter
 
 # =============================================================================
 # FRONTENDS (Target -> DAG)
 # =============================================================================
+
 
 def luigi2dag(module: str, target: str, **kwargs) -> DAG:
     """
@@ -39,6 +44,7 @@ def luigi2dag(module: str, target: str, **kwargs) -> DAG:
     # Wrap in a DAG container
     return DAG(nodes=unique_nodes)
 
+
 def load_luigi_task(module: str, target: str, **kwargs) -> luigi.Task:
     """Programmatically loads a task, injecting parameters."""
     cmdline_args = ["--module", module, target]
@@ -56,6 +62,7 @@ def load_luigi_task(module: str, target: str, **kwargs) -> luigi.Task:
         task = cp.get_task_obj()
 
     return task
+
 
 def _discover_and_rank_luigi(
     target_task: luigi.Task,
@@ -91,6 +98,7 @@ def _discover_and_rank_luigi(
 
     return all_tasks, task_ranks
 
+
 def _group_tasks_into_nodes_luigi(
     all_tasks: Dict[str, luigi.Task], task_ranks: Dict[str, int]
 ) -> Dict[str, BaseNode]:
@@ -118,6 +126,7 @@ def _group_tasks_into_nodes_luigi(
 
     return task_id_to_node
 
+
 def _build_dag_edges_luigi(
     unique_nodes: List[BaseNode], task_id_to_node: Dict[str, BaseNode]
 ):
@@ -131,23 +140,26 @@ def _build_dag_edges_luigi(
                     if parent_node not in node.node_deps:
                         node.node_deps.append(parent_node)
 
+
 # =============================================================================
 # BACKENDS (DAG -> Output)
 # =============================================================================
 
-def export_gitlab(dag: DAG, filepath: str = ".gitlab-ci.yml", **kwargs):
+
+def export_gitlab(dag: DAG, filepath: str = ".gitlab-ci.yml"):
     """Renders the abstract DAG into a GitLab CI/CD pipeline."""
     wspace = get_workspace()
 
     # Extract workspace boilerplate (default/workflow blocks from scicd.yaml)
     boilerplate = {}
-    if hasattr(wspace, 'repository') and hasattr(wspace.repository, 'cicd'):
+    if hasattr(wspace, "repository") and hasattr(wspace.repository, "cicd"):
         if isinstance(wspace.repository.cicd, dict):
             boilerplate.update(wspace.repository.cicd)
 
     dag.write_gitlab_yaml(filepath=filepath, **boilerplate)
 
-def export_dot(dag: DAG, filepath: str = "dag.dot", **kwargs):
+
+def export_dot(dag: DAG, filepath: str = "dag.dot"):
     """Exports the DAG to Graphviz for visualization."""
     dag.export_dot(filepath)
 
@@ -156,13 +168,14 @@ def export_dot(dag: DAG, filepath: str = "dag.dot", **kwargs):
 # UNIVERSAL BUILD ENTRYPOINT
 # =============================================================================
 
+
 def build(
     module: str,
     target: str,
     frontend: str = "luigi",
     backend: str = "gitlab",
     filepath: str = None,
-    **kwargs
+    **kwargs,
 ):
     """
     Universal build function.
@@ -188,26 +201,34 @@ def build(
     for k, v in kwargs.items():
         # Normalize key to use underscores for comparison (Cyclopts provides dashes)
         norm_k = k.replace("-", "_")
-        
+
         if norm_k.startswith("task_"):
             key = norm_k[5:]
             if key in valid_task_keys:
                 task_overrides[key] = v
             else:
-                rich.print(f"[yellow]Warning:[/yellow] '{key}' is not a valid TaskConfig field. Ignoring.")
+                rich.print(
+                    f"[yellow]Warning:[/yellow] '{key}' is not a valid TaskConfig field. Ignoring."
+                )
         elif norm_k.startswith("workspace_") or norm_k in workspace_keys:
-            rich.print(f"[bold red]Security Warning:[/bold red] Workspace override '{norm_k}' is not permitted via CLI. Ignoring.")
+            rich.print(
+                f"[bold red]Security Warning:[/bold red] Workspace override '{norm_k}' is not permitted via CLI. Ignoring."
+            )
         else:
             frontend_params[k] = v
 
     # 1. APPLY RUNTIME DEFAULTS
     if task_overrides:
-        rich.print(f"[bold blue]SciCD:[/bold blue] Applying global TaskConfig overrides: {task_overrides}")
+        rich.print(
+            f"[bold blue]SciCD:[/bold blue] Applying global TaskConfig overrides: {task_overrides}"
+        )
         _ConfigManager.set_runtime_defaults(task_overrides)
 
     # 2. FRONTEND
     if frontend == "luigi":
-        rich.print(f"[bold blue]SciCD:[/bold blue] Initializing Luigi frontend for {module}.{target}")
+        rich.print(
+            f"[bold blue]SciCD:[/bold blue] Initializing Luigi frontend for {module}.{target}"
+        )
         if frontend_params:
             rich.print(f"  -> Passing params to Luigi: {frontend_params}")
         dag = luigi2dag(module, target, **frontend_params)
@@ -218,10 +239,14 @@ def build(
     if backend == "gitlab":
         out_path = filepath or ".gitlab-ci.yml"
         export_gitlab(dag, out_path)
-        rich.print(f"[bold green]SciCD:[/bold green] Generated GitLab CI pipeline at {out_path}")
+        rich.print(
+            f"[bold green]SciCD:[/bold green] Generated GitLab CI pipeline at {out_path}"
+        )
     elif backend == "dot":
         out_path = filepath or "dag.dot"
         export_dot(dag, out_path)
-        rich.print(f"[bold green]SciCD:[/bold green] Generated Graphviz DOT file at {out_path}")
+        rich.print(
+            f"[bold green]SciCD:[/bold green] Generated Graphviz DOT file at {out_path}"
+        )
     else:
         raise ValueError(f"Unsupported backend: {backend}")
