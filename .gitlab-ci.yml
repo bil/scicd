@@ -11,6 +11,9 @@ workflow:
 stages:
 - stage_0
 RunTests:
+  variables:
+    KUBERNETES_CPU_REQUEST: 1
+    KUBERNETES_MEMORY_REQUEST: 4Gi
   tags:
   - bilkube
   timeout: 60m

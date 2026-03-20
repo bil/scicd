@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 import scicd.yamler
 from scicd.config import TaskConfig, get_workspace
 from scicd.git import get_branch
+from scicd.executor import get_executor
 
 
 def gitlab_info(cfg: TaskConfig) -> dict:
@@ -22,8 +23,21 @@ def gitlab_info(cfg: TaskConfig) -> dict:
     if cfg.image:
         info["image"] = str(cfg.image)
 
-    # Variables includes standard env vars and any executor specific vars
+    # Resolve variables from standard config and custom executors
     variables = dict(cfg.variables) if cfg.variables else {}
+    
+    # Custom Executors
+    if cfg.tags:
+        try:
+            executor = get_executor(cfg.tags)
+            # Call the executor function to get additional environment variables
+            executor_vars = executor.func(cfg)
+            if executor_vars:
+                variables.update(executor_vars)
+        except ValueError:
+            # No matching executor found, which is fine (standard tags)
+            pass
+
     if cfg.executor_config:
         variables.update(cfg.executor_config)
 
