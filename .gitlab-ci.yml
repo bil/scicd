@@ -11,6 +11,8 @@ workflow:
 stages:
 - stage_0
 RunTests:
+  tags:
+  - bilkube
   timeout: 60m
   stage: stage_0
   script:
