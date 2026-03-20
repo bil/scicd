@@ -5,12 +5,10 @@ from typing import Any, Dict, List
 
 import luigi
 
-from scicd.yamler import deep_update
-
 
 class Adapter(ABC):
     """
-    Wraps a single unit of work (Luigi task instance).
+    Wraps a single unit of work (e.g. Luigi task instance).
     Provides an interface for extracting metadata and execution commands.
     """
 
