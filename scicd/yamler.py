@@ -122,25 +122,6 @@ def load_yaml(path: str, **kwargs: Any) -> Dict[str, Any]:
     return expand_vars(data)
 
 
-def specify(
-    config: Dict[str, Any],
-    override: Optional[List[Dict[str, Any]]] = None,
-    **kwargs: Any,
-) -> Dict[str, Any]:
-    """
-    Merges base parameters with input-specific regex overrides.
-    """
-    out = config.copy()
-    if not override:
-        return out
-
-    for kws in override[::-1]:  # top rule has priority
-        spec = kws.get("match", {})
-        # Ensure values are matched as strings for regex compatibility
-        if all(re.match(str(v), str(kwargs.get(k))) for k, v in spec.items()):
-            out = deep_update(out, kws.get("config", {}))
-    return out
-
 
 if __name__ == "__main__":
     fire.Fire()
