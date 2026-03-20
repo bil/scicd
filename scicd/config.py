@@ -14,156 +14,217 @@ from scicd.yamler import deep_update, load_yaml
 
 @dataclass
 class ConcurrencyConfig:
-    """Configuration for task concurrency strategy."""
+    """
+    Configuration for task concurrency strategy.
+
+    Defines how tasks are distributed across workers in the CI/CD pipeline.
+    """
 
     method: Literal["biject", "slice", "queue"] = "biject"
     """
-    Concurrency method.
-    Options:
-        'biject' (1:1 job mapping)
-        'slice' (N workers for M tasks)
-        'queue' (N workers pull from queue)
+    Concurrency method to employ.
+    - 'biject': Direct 1:1 mapping between tasks and jobs.
+    - 'slice': Distributes M tasks across N static worker jobs.
+    - 'queue': Workers pull tasks dynamically from a central queue.
     """
 
     workers: Optional[int] = None
     """
-    Number of workers for 'slice' or 'queue' methods.
-    Required for slice/queue, ignored for biject.
+    Number of concurrent workers to spawn.
+    Must be positive. Required for 'slice' and 'queue' methods.
     """
 
     def __post_init__(self):
-        if self.method in ["slice", "queue"] and self.workers is None:
-            raise ValueError(f"workers required when method='{self.method}'")
+        valid_methods = ["biject", "slice", "queue"]
+        if self.method not in valid_methods:
+            raise ValueError(
+                f"method must be one of {valid_methods}, got '{self.method}'"
+            )
+
+        if self.method in ["slice", "queue"]:
+            if self.workers is None:
+                raise ValueError(
+                    f"workers count is required when method is '{self.method}'"
+                )
+            if self.workers <= 0:
+                raise ValueError(
+                    f"workers must be a positive integer, got {self.workers}"
+                )
 
 
 @dataclass
 class QueueConfig:
-    """Configuration for queue-based concurrency."""
+    """
+    Configuration for queue-based dynamic concurrency.
+
+    Describes the backend message broker used to coordinate task execution
+    when using the 'queue' concurrency method.
+    """
 
     platform: Optional[Literal["gcp"]] = None
     """
-    Queue backend platform.
-    Options: 'gcp'
-    Pending: 'aws', 'azure', 'redis'
+    Message broker backend.
+    Currently supported: 'gcp' (Pub/Sub).
+    Planned support: 'aws' (SQS), 'redis'.
     """
 
     topic: str = ""
-    """Topic/stream name."""
+    """
+    Queue/Topic name for the message broker.
+    For GCP: The Pub/Sub topic ID.
+    """
 
     subscription: str = ""
-    """Subscription/consumer group name."""
+    """
+    Subscription or consumer group identifier.
+    For GCP: The Pub/Sub subscription ID.
+    """
 
     config: Dict[str, Any] = field(default_factory=dict)
     """
-    Platform-specific configuration.
-    Examples:
-        - GCP: {'project': 'my-project'}
-        - AWS: {'region': 'us-west-2', 'account_id': '123456789'}
-        - Redis: {'host': 'localhost', 'port': 6379}
+    Extra platform-specific settings.
+    Example (GCP): {'project': 'gcp-project-id'}
     """
 
     def __post_init__(self):
+        if self.platform is None:
+            # Note: This is checked in TaskConfig if method='queue',
+            # but we can enforce it here too if not None.
+            pass
+        elif self.platform not in ["gcp"]:
+            raise ValueError(
+                f"Currently only 'gcp' platform is supported for queues, got '{self.platform}'"
+            )
+
         if not self.topic:
-            raise ValueError("queue.topic is required")
+            raise ValueError("queue.topic cannot be empty")
         if not self.subscription:
-            raise ValueError("queue.subscription is required")
+            raise ValueError("queue.subscription cannot be empty")
 
 
 @dataclass
 class TaskConfig:
     """
-    Configuration for a single task in the workflow.
+    Unified configuration for a single task within SciCD.
 
-    This represents the uniform configuration extracted from work definitions
-    and merged with defaults from .scicd/config.yaml.
+    Aggregates resource requirements, runtime environment, and platform-specific
+    overrides. This is the source of truth for generating CI/CD job definitions.
     """
 
     # ===== Executor Selection =====
     tags: List[str] = field(default_factory=list)
     """
-    Tags used to match task to an executor (all tags must match).
-    Sets executor specific environmnet variables.
-    Shoud align with how CI/CD platform uses tags for runner selection.
+    Targeted runner/executor tags.
+    All tags must be present on the CI/CD runner for this task to be scheduled.
     """
 
     # ===== Resources =====
     cpu: int = 1
-    """Number of CPU cores."""
+    """
+    Number of CPU cores requested.
+    Must be a positive integer.
+    """
 
     memory: str = "8Gi"
+    """
+    RAM allocation.
+    Supported units: K/Ki, M/Mi, G/Gi, T/Ti (with optional 'B' suffix).
+    Default: '8Gi'.
+    """
+
     disk: Optional[str] = None
     """
-    Memory allocation.
-    Can be:
-    - int: megabytes (e.g., 500 = 0.5GB)
-    - str: with units (e.g., '8Gi', '8192Mi', '8G', '8000M')
-    Supported units: K/Ki, M/Mi, G/Gi, T/Ti (with optional 'B' suffix)
+    Ephemeral disk storage allocation.
+    Same unit support as 'memory'.
     """
 
     gpu: Optional[int] = None
-    """Number of GPUs. None means no GPU."""
+    """
+    Number of GPUs requested.
+    Must be positive if provided.
+    """
+
     gpu_type: Optional[str] = None
     """
-    Specific GPU type/model.
-    Examples: 'a100', 'v100', 'nvidia-tesla-t4'
+    Specific GPU architecture or model (e.g., 'a100', 't4').
+    Usage depends on CI/CD executor capability.
     """
 
     # ===== Scheduling/Placement =====
     partition: Optional[str] = None
     """
-    Partition/queue name, used in HPC clusters.
+    Queue or partition name (e.g., Slurm partitions, specialized runner groups).
     """
 
     # ===== Time Constraints =====
     timeout: str = "60m"
     """
-    Maximum runtime as a string.
-    Uses GitLab format (e.g., '1h', '30m', '1h 30m')
+    Maximum allowed runtime for the task.
+    Supports GitLab format: '1h', '45m', '1h 30m'.
     """
 
     # ===== Reliability =====
     retry: int = 0
-    """Number of times to retry on failure."""
+    """
+    Number of retry attempts on job failure.
+    Must be non-negative.
+    """
 
     # ===== Container/Runtime =====
     image: Optional[str] = None
-    """Container image to use."""
+    """
+    Docker/Singularity image URL to use for execution.
+    """
 
     python_cmd: str = "python3"
-    """Python command for execution."""
+    """
+    Python executable name or absolute path within the container/environment.
+    """
 
     # ===== Environment Variables =====
     variables: Dict[str, Union[str, int, float]] = field(default_factory=dict)
-    """Environment variables to set in CI/CD job."""
+    """
+    Standard environment variables to inject into the task environment.
+    """
 
     # ===== Executor-Specific Variables =====
     executor_config: Dict[str, Union[str, int, float]] = field(default_factory=dict)
     """
-    Executor-specific environmnet variables on top of what will be auto-generated.
-    Examples:
-        - {'SLURM_GRES': 'gpu:a100:4', 'SLURM_QOS': 'high'}
+    Backend-specific variables passed directly to the executor (e.g., SLURM_* vars).
     """
 
     # ===== CI/CD Platform Config =====
     cicd_config: Dict[str, Any] = field(default_factory=dict)
     """
-    CI/CD job configuration (pass-through directly to job YAML).
-    For GitLab: resource_group, interruptible, etc.
+    Direct passthrough to the CI/CD YAML configuration (e.g., 'interruptible: true').
     """
 
     # ===== Nested Configurations =====
     concurrency: Union[ConcurrencyConfig, Dict[str, Union[str, int]]] = field(
         default_factory=ConcurrencyConfig
     )
-    """Concurrency configuration."""
+    """
+    Task-level concurrency strategy.
+    """
 
     queue: Union[QueueConfig, Dict[str, Any], None] = field(default_factory=QueueConfig)
-    """Queue configuration (only needed if concurrency.method='queue')."""
+    """
+    Messaging queue settings, only relevant if concurrency.method='queue'.
+    """
 
     def __post_init__(self):
         """
-        Auto-convert nested dicts to dataclasses and validate configuration.
+        Validate resource constraints and auto-convert nested dictionaries.
         """
+        if self.cpu <= 0:
+            raise ValueError(f"cpu must be positive, got {self.cpu}")
+
+        if self.retry < 0:
+            raise ValueError(f"retry cannot be negative, got {self.retry}")
+
+        if self.gpu is not None and self.gpu <= 0:
+            raise ValueError(f"gpu must be positive if specified, got {self.gpu}")
+
         # Auto-convert concurrency dict to ConcurrencyConfig
         if isinstance(self.concurrency, dict):
             self.concurrency = ConcurrencyConfig(**self.concurrency)
@@ -173,30 +234,37 @@ class TaskConfig:
             self.queue = QueueConfig(**self.queue)
 
         # Validate that queue config exists if using queue concurrency
-        if self.concurrency.method == "queue" and (
-            self.queue.platform is None
-            or self.queue.subscription is None
-            or self.queue.topic is None
-        ):
-            raise ValueError(
-                "Queue must be fully configured when concurrency.method='queue'"
-            )
+        if self.concurrency.method == "queue":
+            if self.queue is None:
+                raise ValueError(
+                    "queue configuration is required when concurrency.method='queue'"
+                )
+            if (
+                self.queue.platform is None
+                or not self.queue.subscription
+                or not self.queue.topic
+            ):
+                raise ValueError(
+                    "Queue must be fully configured (platform, subscription, topic) "
+                    "when concurrency.method='queue'"
+                )
 
-        # Validate memory format
+        # Validate resource formats
         try:
             self.memory = self.validate_memory(self.memory)
         except ValueError as e:
-            raise ValueError("`memory` invalid!") from e
+            raise ValueError("Invalid memory format") from e
 
-        try:
-            self.disk = self.validate_memory(self.disk)
-        except ValueError as e:
-            raise ValueError("`disk` invalid!") from e
+        if self.disk:
+            try:
+                self.disk = self.validate_memory(self.disk)
+            except ValueError as e:
+                raise ValueError("Invalid disk format") from e
 
         try:
             self.timeout = self.validate_time(self.timeout)
         except ValueError as e:
-            raise ValueError("`timeout` invalid!") from e
+            raise ValueError("Invalid timeout format") from e
 
     @property
     def memory_mb(self) -> int:
@@ -381,88 +449,107 @@ def _dict_to_namespace(d: Any) -> Any:
 @dataclass
 class RemoteConfig:
     """
-    Remote storage configuration.
+    Configuration for remote data synchronization.
 
-    SciCD uses this to generate sync jobs in the CI/CD pipeline.
+    SciCD uses this to automatically generate 'pull' and 'push' steps
+    within CI/CD jobs, ensuring data persistence across ephemeral workers.
     """
 
     root: Optional[str] = None
     """
-    Local root directory for remote sync.
-
-    Example:
-        root: "/workspace/outputs"
-        url: "s3://bucket/outputs"
-        
-    Files in /workspace/outputs/results/file.txt will sync to s3://bucket/outputs/results/file.txt
-    Files outside /workspace/outputs are ignored.
+    Local base directory for synchronization.
+    Only files within this directory will be synced to/from the remote.
     """
 
     url: Optional[str] = None
-    """Remote storage URL (e.g., 'bilgd:bucket/path' for rclone, 's3://bucket' for S3)"""
+    """
+    Remote storage destination.
+    Format depends on protocol (e.g., 's3://my-bucket/path' or 'rclone-remote:path').
+    """
 
-    protocol: Literal["rclone", "https"] = "rclone"  # future: rsync?
-    """Protocol for remote sync."""
+    protocol: Literal["rclone", "https"] = "rclone"
+    """
+    Transfer protocol to use.
+    - 'rclone': High-performance sync for various backends (S3, GCS, SFTP).
+    - 'https': Direct download/upload via HTTP.
+    """
 
     flags: List[str] = field(default_factory=list)
-    """Additional flags for the sync command."""
+    """
+    Additional CLI flags passed to the underlying sync tool (e.g., ['--transfers=16']).
+    """
 
     pull_inputs: bool = False
     """
-    Whether to pull required artifacts from remote upon task start.
+    If True, SciCD generates a 'before_script' step to pull data from remote
+    before the task begins.
     """
 
     push_outputs: bool = False
     """
-    Whether to push to remote after completion of each task.
+    If True, SciCD generates an 'after_script' step to push local results
+    to remote storage upon task completion.
     """
 
     def __post_init__(self):
+        valid_protocols = ["rclone", "https"]
+        if self.protocol not in valid_protocols:
+            raise ValueError(
+                f"protocol must be one of {valid_protocols}, got '{self.protocol}'"
+            )
+
         if self.pull_inputs or self.push_outputs:
             if not self.url:
                 raise ValueError(
-                    "remote.url is required when pull_inputs or push_outputs is enabled"
+                    "remote.url is mandatory when pull_inputs or push_outputs is enabled"
                 )
             if not self.root:
                 raise ValueError(
-                    "remote.root is required when pull_inputs or push_outputs is enabled"
+                    "remote.root is mandatory when pull_inputs or push_outputs is enabled"
                 )
 
 
 @dataclass
 class RepositoryConfig:
-    """Configuration for repository and CI/CD platform."""
+    """
+    Configuration for the source control and CI/CD platform.
+
+    Contains the connection details and platform-specific settings
+    for generating and deploying the CI/CD pipeline.
+    """
 
     platform: Literal["gitlab", "github"] = "gitlab"
-    """CI/CD platform."""
+    """CI/CD platform targeted for pipeline generation."""
 
     url: str = ""
-    """Repository URL."""
+    """
+    Base URL of the repository (e.g., 'https://gitlab.com').
+    """
 
     project: str = ""
     """
-    Project identifier.
-    For GitLab: 'group/project' or 'user/project'
-    For GitHub: 'owner/repo'
+    Full project or repository path.
+    - GitLab: 'namespace/project-name'
+    - GitHub: 'owner/repo-name'
     """
 
     cicd: Dict[str, Any] = field(default_factory=dict)
     """
-    Platform-specific CI/CD configuration (pass-through).
-    For GitLab: workflow, default, stages, etc.
-    For GitHub: on, env, permissions, etc.
+    Platform-specific top-level configuration keys.
+    Passed through directly to the root of the generated YAML.
     """
 
     def __post_init__(self):
-        if self.platform not in ["gitlab", "github"]:
+        valid_platforms = ["gitlab", "github"]
+        if self.platform not in valid_platforms:
             raise ValueError(
-                f"Invalid platform: {self.platform}. Must be 'gitlab' or 'github'"
+                f"platform must be one of {valid_platforms}, got '{self.platform}'"
             )
 
         if not self.url:
-            raise ValueError("repository.url is required")
+            raise ValueError("repository.url is mandatory")
         if not self.project:
-            raise ValueError("repository.project is required")
+            raise ValueError("repository.project is mandatory")
 
 
 class Singleton(ABC):
@@ -486,37 +573,36 @@ class Singleton(ABC):
 @dataclass
 class WorkspaceConfig(Singleton):
     """
-    Workspace configuration.
+    Root configuration for a SciCD project workspace.
 
-    Core configuration used by SciCD for CI/CD pipeline generation:
-    - repository: Where to generate the pipeline
-    - remote: Optional remote storage sync (SciCD generates sync jobs)
-
-    User configuration for utilities and extensions:
-    - user: Free-form configuration!
+    Defines the environment where SciCD operates, including source control
+    integration, remote storage sync, and custom user extensions.
     """
 
     repository: Union[RepositoryConfig, Dict[str, Any]] = field(
         default_factory=RepositoryConfig
     )
-    """Repository and CI/CD platform configuration (core, required)."""
+    """
+    Platform configuration (GitLab/GitHub).
+    Required for CI/CD pipeline generation.
+    """
 
     remote: Union[RemoteConfig, Dict[str, Any], None] = None
     """
-    Remote storage configuration (core, optional).
-    
-    If provided, SciCD generates sync jobs in the pipeline:
-    - pull_on_start: Generates before_script to pull data
-    - push_on_completion: Generates after_script to push results
+    Global remote storage defaults.
+    If specified, provides the fallback configuration for task-level sync.
     """
 
     user: Union[Dict[str, Any], SimpleNamespace] = field(default_factory=dict)
     """
-    Free-form user configuration
+    Extensible user-defined configuration.
+    Recursively converted to a SimpleNamespace for convenient dot-notation access.
     """
 
     def __post_init__(self):
-        """Auto-convert nested dicts to dataclasses and namespaces."""
+        """
+        Auto-convert nested dictionaries to structured dataclasses.
+        """
         # Convert repository dict to dataclass
         if isinstance(self.repository, dict):
             self.repository = RepositoryConfig(**self.repository)
@@ -694,174 +780,3 @@ def cascade(config: dict, override: list, **kwargs) -> dict:
         if all(re.match(str(v), str(kwargs.get(k))) for k, v in spec.items()):
             out = deep_update(out, kws.get("config", {}))
     return out
-
-
-# def cascading_config(family: str, **kwargs):
-#     """
-#     Parameter-dependent overwrite of insignificant Task configuration.
-#     These are basically "insignificant" (non-identifying) parameters.
-#     """
-#     path = SciCDConfig().workspace_config().path_parameters
-#     path = yml_suffix(path)  # if a suffix wasn't provided, tries to infer!
-
-#     # Not using feature
-#     if path is None:
-#         return {}
-
-#     if not Path(path).exists():
-#         print(f"Tried to load parameters file at {str(path)} but didn't exist!")
-#         return {}
-
-#     cfg = load_yaml(path)
-
-#     # Nothing provided for this Task
-#     if family not in cfg:
-#         return {}
-
-#     # Override default config
-#     cfg = cfg[family]
-#     config = cfg.get("config", {})
-#     override = cfg.get("override", [])
-#     # Cascading logic
-#     return specify(config, override, **kwargs)
-
-
-# class SciCDConfig(Singleton):
-#     """Singleton configuration manager for SciCD."""
-
-#     def __init__(self, **overrides):
-#         super().__init__(**overrides)
-#         if overrides:
-#             self.override(**overrides)
-
-#     def __repr__(self) -> str:
-#         """Provides a pretty-printed dictionary representation for the CLI."""
-#         return pprint.pformat(self.config_dict, indent=2, sort_dicts=False)
-
-#     def _expand_env_vars(self, data: Any) -> Any:
-#         """Recursively expand environment variables in strings, lists, and dicts."""
-#         if isinstance(data, dict):
-#             return {k: self._expand_env_vars(v) for k, v in data.items()}
-#         elif isinstance(data, list):
-#             return [self._expand_env_vars(i) for i in data]
-#         elif isinstance(data, str):
-#             return os.path.expandvars(data)
-#         return data
-
-#     def _load_toml_state(self):
-#         """Loads pyproject.toml into the base state."""
-#         toml_path = Path("pyproject.toml")
-#         if toml_path.exists():
-#             with open(toml_path, "rb") as f:
-#                 pyproject_data = self._expand_env_vars(tomli.load(f))
-#                 self.config_dict = pyproject_data.get("tool", {}).get("scicd", {})
-
-#     def override(self, **kwargs):
-#         """
-#         Only permits overrides for TaskConfig settings.
-#         Workspace settings (paths, GitLab URLs) are protected to ensure
-#         consistency between local DAG generation and CI/CD execution.
-#         """
-#         task_overrides = {}
-
-#         for key, val in kwargs.items():
-#             if key.startswith("scicd_"):
-#                 # Can override with scicd namespace
-#                 # Or with direct key!
-#                 key = key[len("scicd_") :]
-#             # Handle specific task overrides: --scicd-tasks-MyTask-cpu="4"
-#             if key.startswith("task_"):
-#                 remainder = key[len("task_") :]
-#                 parts = remainder.split("_", 1)  # Expect <Task>_<key>
-#                 if len(parts) == 2:  # we should
-#                     family, option = parts
-#                     # We only allow overriding fields that exist in TaskConfig
-#                     if option in fields(TaskConfig):
-#                         task_overrides.setdefault("task", {}).setdefault(family, {})[
-#                             option
-#                         ] = val
-#                     else:
-#                         print(
-#                             f"Cannot override workspace configuration {option} for {family}!\n",
-#                             f"Set {option} in pyproject.toml under [tool.scicd] namespace.",
-#                         )
-
-#             # Handle global task defaults (e.g. cpu)
-#             else:
-#                 option = (
-#                     key  # we're not in task namespace, so we are using key directly
-#                 )
-#                 # Block workspace-only keys from being overridden at CLI
-#                 if option in fields(TaskConfig):
-#                     task_overrides[option] = val
-#                 else:
-#                     print(
-#                         f"Ignoring override for protected workspace setting: {option}\n",
-#                         f"Set {option} in pyproject.toml under [tool.scicd] namespace.",
-#                     )
-
-#         # Update global state with validated task overrides only
-#         task_overrides = self._expand_env_vars(task_overrides)
-#         self.config_dict = deep_update(self.config_dict, task_overrides)
-
-#     def workspace_config(self) -> WorkspaceConfig:
-#         """
-#         Returns only the global workspace settings from the root of pyproject.toml.
-#         Ignores any task-specific overrides.
-#         """
-
-#         return self._build_dataclass(WorkspaceConfig, self.config_dict)
-
-#     def family_config(self, family: str = None) -> TaskConfig:
-#         """
-#         Returns the resolved execution settings for a specific task family.
-#         Applies task-specific overrides on top of the root defaults.
-#         """
-#         param = deepcopy(self.config_dict)
-#         tasks_config = param.pop("task", {})
-
-#         # Apply the specific family overrides
-#         if family and family in tasks_config:
-#             param = deep_update(param, tasks_config[family])
-
-#         return self._build_dataclass(TaskConfig, param)
-
-#     def _build_dataclass(
-#         self,
-#         config_class: type[WorkspaceConfig] | type[TaskConfig],
-#         config_dict: dict,
-#     ) -> WorkspaceConfig | TaskConfig:
-#         """Helper to enforce strict dataclass schema on a dictionary."""
-#         valid_keys = {f.name for f in fields(config_class)}
-#         filtered_config = {k: v for k, v in config_dict.items() if k in valid_keys}
-#         return config_class(**filtered_config)
-
-
-# def get_config(family: str = None, **kwargs):
-#     """
-#     CLI utility to inspect the active configuration state.
-
-#     Args:
-#         family (str, optional): The Luigi task family to inspect. If None,
-#                                 returns the raw global config state.
-#         **kwargs: Variadic overrides (e.g., scicd_image="ubuntu:latest").
-#     """
-#     cfg = SciCDConfig()
-
-#     # Apply any CLI overrides first so the user sees the final state
-#     if kwargs:
-#         cfg.override(**kwargs)
-
-#     # Return the dataclass if they asked for a specific task, else the raw singleton instance
-#     if family:
-#         cfg = cfg.family_config(family)
-
-#     return str(cfg)
-
-
-# def get_workspace():
-#     return SciCDConfig().workspace_config()
-
-
-# def get_family(family: str = None, **kwargs):
-#     return SciCDConfig(**kwargs).family_config(family)
