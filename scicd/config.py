@@ -3,6 +3,7 @@ Module docstring.
 """
 
 import re
+import os
 
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Union, Literal, Tuple
@@ -643,7 +644,6 @@ def find_config_path() -> Path:
     Raises:
         FileNotFoundError: If no configuration file is found in any standard location.
     """
-    import os
 
     # 1. Environment Variable
     env_path = os.getenv("SCICD_CONFIG_PATH")

@@ -3,9 +3,14 @@ CLI interface for scicd using Cyclopts.
 """
 
 import os
+import importlib
+import dataclasses
+import json
 import sys
 from typing import Annotated, Optional
 
+
+import luigi
 import rich
 from cyclopts import App, Parameter
 
@@ -34,14 +39,11 @@ def run_luigi(
     Worker entrypoint to execute a single Luigi task.
     Used by CI jobs to run the actual work unit.
     """
-    import importlib
-    import json
-    import luigi
 
     # 1. Dynamically import the module
     try:
         mod = importlib.import_module(module)
-    except ImportError as e:
+    except ImportError:
         rich.print(f"[bold red]Error:[/bold red] Could not find module '{module}'")
         sys.exit(1)
 
@@ -66,11 +68,10 @@ def run_luigi(
     # 4. Instantiate and Execute via Luigi
     try:
         task_instance = task_cls.from_str_params(param_dict)
-    except Exception as e:
+    except Exception:  # pylint: disable=broad-exception-caught
         rich.print(
             f"[bold red]Error:[/bold red] Could not instantiate task '{family}' with params {param_dict}"
         )
-        print(str(e))
         sys.exit(1)
 
     rich.print(f"[bold blue]Executing Luigi Task:[/bold blue] {module}.{family}")
@@ -159,7 +160,6 @@ def config(
     Inspects the global and task-level configuration.
     Prints the loaded config state.
     """
-    import dataclasses
 
     workspace = scicd.config.get_workspace()
     task_cfg = scicd.config.get_task_config(**overrides)
@@ -189,7 +189,6 @@ def config_key(
     Extracts a specific value from the configuration using a key path.
     Useful for shell scripts and CI/CD variables.
     """
-    import dataclasses
 
     workspace_dict = dataclasses.asdict(scicd.config.get_workspace())
     task_dict = dataclasses.asdict(scicd.config.get_task_config(**overrides))
@@ -226,7 +225,6 @@ def config_task(
     """
     Inspects the resolved task configuration.
     """
-    import dataclasses
 
     result = scicd.config.get_task_config(**overrides)
     rich.print(dataclasses.asdict(result))

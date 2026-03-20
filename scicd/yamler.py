@@ -5,11 +5,10 @@ YAML and Jinja2 processing with Type Hints.
 import os
 import re
 import pathlib
-from typing import Any, Dict, List, Optional, TypeVar
+from typing import Any, Dict, List, TypeVar
 from collections.abc import Mapping
 from copy import deepcopy
 
-import fire
 import frontmatter
 import yaml
 from jinja2 import Environment
@@ -129,7 +128,3 @@ def slugify(text: str) -> str:
     clean = re.sub(r"[^a-zA-Z0-9_]", "_", text)
     # Collapse multiple underscores (e.g., 'a...b' -> 'a___b' -> 'a_b')
     return re.sub(r"_+", "_", clean).strip("_")
-
-
-if __name__ == "__main__":
-    fire.Fire()

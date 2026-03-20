@@ -25,7 +25,7 @@ def gitlab_info(cfg: TaskConfig) -> dict:
 
     # Resolve variables from standard config and custom executors
     variables = dict(cfg.variables) if cfg.variables else {}
-    
+
     # Custom Executors
     if cfg.tags:
         try:
