@@ -1,9 +1,12 @@
 python-dotenv
 python-gitlab
 python-frontmatter
-luigi[toml]
+luigi
 cyclopts
 tomli
 Jinja2
 PyYAML
 rich
+requests
+pytest
+pytest-mock
