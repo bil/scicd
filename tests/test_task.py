@@ -114,8 +114,8 @@ def test_global_pull_push(mocker):
     """
     Verifies the global pull/push triggers for generic Luigi tasks.
 
-    Ensures that when remote syncing is enabled, any task entering START
-    will trigger a pull of its inputs, and any task reaching SUCCESS
+    Ensures that when remote syncing is enabled, any task entering START 
+    will trigger a pull of its inputs, and any task reaching SUCCESS 
     will trigger a push of its outputs.
     """
     mock_ws = mocker.MagicMock()
@@ -140,3 +140,39 @@ def test_global_pull_push(mocker):
 
     _push_outputs_on_success(task)
     mock_push.assert_called_once()
+
+
+def test_centralized_cascading_config(mocker, tmp_path):
+    """
+    Verifies that HashTask correctly uses a centralized configuration file
+    with potentially multi-level nested keys.
+    """
+    # 1. Create a centralized config file with nested keys
+    cascade_file = tmp_path / "global_params.yaml"
+    cascade_file.write_text(
+        """
+pipelines:
+  v1:
+    MyMockTask:
+      config:
+        window: 10
+      override:
+        - match: { param: "special" }
+          config: { window: 99 }
+""",
+        encoding="utf-8",
+    )
+
+    # 2. Mock workspace to point to this file and define the hierarchy
+    mock_ws = mocker.MagicMock()
+    mock_ws.user.path_cascade = str(cascade_file)
+    # We tell HashTask to drill into ['pipelines', 'v1', <Family>]
+    mock_ws.user.cascade_root = ["pipelines", "v1"]
+    
+    mocker.patch("scicd.task.get_workspace", return_value=mock_ws)
+    mocker.patch("scicd.task.get_git_commit", return_value="abc")
+
+    # 3. Test lookup from nested central file
+    task = MyMockTask(param="normal")
+    assert task.cfg.window == 10
+

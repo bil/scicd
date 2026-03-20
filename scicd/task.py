@@ -47,7 +47,25 @@ class HashTask(luigi.Task):
     @cached_property
     def cfg_dict(self) -> Dict[str, Any]:
         """Raw dictionary of 'insignificant' parameters from YAML/TOML."""
-        return cascading_config(self.get_task_family(), **self.param_kwargs)
+        # 1. Check if user has defined a central cascade path in WorkspaceConfig
+        path_cascade = getattr(self.workspace.user, "path_cascade", None)
+
+        if path_cascade:
+            # Determine the full root key list
+            # We allow an optional prefix list (e.g., ['pipelines', 'v1'])
+            root_prefix = getattr(self.workspace.user, "cascade_root", [])
+            if isinstance(root_prefix, str):
+                root_prefix = [root_prefix]
+            
+            root_key = root_prefix + [self.get_task_family()]
+
+            # Use the central file, namespaced by the task family
+            return cascading_config(
+                path_cascade, root_key=root_key, **self.param_kwargs
+            )
+        else:
+            # Fallback to current behavior: look for <Family>.yaml
+            return cascading_config(self.get_task_family(), **self.param_kwargs)
 
     @cached_property
     def cfg(self) -> Any:

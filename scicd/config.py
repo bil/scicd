@@ -792,6 +792,7 @@ def reset_config():
 
 def cascading_config(
     filepath: str | Path,
+    root_key: Optional[Union[str, List[str]]] = None,
     config_key: str = "config",
     override_key: str = "override",
     **kwargs,
@@ -800,7 +801,8 @@ def cascading_config(
     Load a YAML file and apply cascading config logic based on kwargs.
 
     Args:
-        filepath: Path to YAML file containing 'config' and 'override' keys
+        filepath: Path to YAML file
+        root_key: Optional key (or list of keys) to jump into before looking for config/override
         **kwargs: Parameters to match against override conditions
 
     Returns:
@@ -809,10 +811,17 @@ def cascading_config(
     path = Path(filepath)
 
     if not path.exists():
-        print(f"Tried to load parameters file at {str(path)} but it doesn't exist!")
         return {}
 
-    cfg = load_yaml(path)
+    cfg = load_config(path)
+
+    # Drill down if root_key is provided
+    if root_key:
+        if isinstance(root_key, str):
+            root_key = [root_key]
+        
+        for k in root_key:
+            cfg = cfg.get(k, {})
 
     config = cfg.get(config_key, {})
     override = cfg.get(override_key, [])
