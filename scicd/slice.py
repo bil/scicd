@@ -9,17 +9,28 @@ from typing import Annotated
 import yaml
 from cyclopts import App, Parameter
 
-from scicd.config import TaskConfig
+from scicd.config import TaskConfig, WorkspaceConfig, get_workspace
+from scicd.yamler import deep_update
 
 app = App(help="Slicing and child-pipeline generation utilities.")
 
 
 def generate_child_pipeline_config(
-    family: str, manifest_path: str, cfg: TaskConfig, gitlab_info: dict, gen_id: str
+    family: str,
+    manifest_path: str,
+    cfg: TaskConfig,
+    wspace: WorkspaceConfig,
+    gitlab_info: dict,
+    gen_id: str,
 ) -> dict:
     """
     Generate the YAML configuration for a GitLab child pipeline.
     """
+    # Keys that are valid at the root of a GitLab CI/CD YAML
+    pipeline_config = {"stages": ["execute"]}
+    # Add boilerplate
+    pipeline_config = deep_update(pipeline_config, wspace.cicd)
+
     worker_job = gitlab_info.copy()
     workers = cfg.concurrency.workers
 
@@ -37,10 +48,8 @@ def generate_child_pipeline_config(
         }
     ]
 
-    return {
-        "stages": ["execute"],
-        f"{family}_worker": worker_job,
-    }
+    pipeline_config[f"{family}_worker"] = worker_job
+    return pipeline_config
 
 
 @app.command()
@@ -66,6 +75,7 @@ def generate(
 
     # Reconstruct TaskConfig for validation and helper access
     cfg = TaskConfig(**cfg_dict)
+    wspace = get_workspace()
 
     # The manifest now stores raw commands instead of Luigi metadata
     manifest_data = [{"command": cmd} for cmd in command_list]
@@ -77,6 +87,7 @@ def generate(
         family=family,
         manifest_path="manifest.yml",
         cfg=cfg,
+        wspace=wspace,
         gitlab_info=gitlab_info,
         gen_id=gen_id,
     )

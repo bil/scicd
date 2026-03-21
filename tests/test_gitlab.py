@@ -7,8 +7,9 @@ import json
 import shlex
 from scicd.dag import DAG, BijectNode, SliceNode
 from scicd.adapter import BaseAdapter
-from scicd.config import TaskConfig, ConcurrencyConfig
+from scicd.config import TaskConfig, ConcurrencyConfig, WorkspaceConfig
 from scicd.backend.gitlab.decode import render_node_gitlab, write_gitlab_yaml
+from scicd.slice import generate_child_pipeline_config
 
 
 class MockAdapter(BaseAdapter):
@@ -89,6 +90,7 @@ def test_slice_node_child_yml_generation(tmp_path, mocker):
     3. The child configuration correctly implements GitLab's parallel execution schema.
     """
     # Mock SliceNode config
+    wspace = WorkspaceConfig()
     cfg = TaskConfig(concurrency=ConcurrencyConfig(method="slice", workers=5))
     adapter1 = MockAdapter("Task", {"id": 1}, "Task_1", cfg=cfg)
     adapter2 = MockAdapter("Task", {"id": 2}, "Task_2", cfg=cfg)
@@ -103,12 +105,12 @@ def test_slice_node_child_yml_generation(tmp_path, mocker):
     assert "scicd.slice generate" in gen_script
 
     # Now test the generation logic itself from scicd.slice
-    from scicd.slice import generate_child_pipeline_config
 
     child_yml = generate_child_pipeline_config(
         family="Task",
         manifest_path="manifest.yml",
         cfg=cfg,
+        wspace=wspace,
         gitlab_info={"image": "python:3.10"},
         gen_id=gen_job_id,
     )
