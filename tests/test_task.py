@@ -120,9 +120,6 @@ def test_event_handlers_and_sync(mocker, tmp_path):
     # Call the SUCCESS handler (should checkpoint and push)
     mock_push = mocker.patch("scicd.remote.push")
     task.trigger_event(luigi.Event.SUCCESS, task)
-    # task.run()
-
-    print("OUT_FILE", out_file)
 
     fp_file = out_file.parent / ".luigi_fingerprints" / f"{out_file.name}.fingerprint"
 
@@ -160,7 +157,6 @@ MyMockTask:
 
     # Test lookup from nested central file
     task1 = MyMockTask(param="normal")
-    print("CONFIG CONFIG CONFIG!!!!!!!!!!!!!!!!!!", task1.cfg)
     assert task1.cfg.window == 10
 
     # 4. Test override matching from central file

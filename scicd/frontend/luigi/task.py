@@ -146,7 +146,6 @@ def generate_scitask(cls: Type[T], hashed: bool = True) -> Type[T]:
             )
 
             if not cascade_path:
-                # print(f"'cascade_path' not found in `user` configuration for task '{self.get_task_family()}'. Skipping!")
                 return {}
 
             return scicd.config.cascading_config(
@@ -210,10 +209,8 @@ def generate_scitask(cls: Type[T], hashed: bool = True) -> Type[T]:
                             p.parent / ".luigi_fingerprints" / f"{p.name}.fingerprint"
                         )
                     files_to_pull.extend(fp_files)
-                print("PULLING?", files_to_pull)
                 if files_to_pull:
                     if scicd.remote.pull(*files_to_pull):
-                        print("WE PULLED IT")
                         # Re-verify everything after the pull
                         if hashed:
                             return self._check_fingerprints()
@@ -237,15 +234,9 @@ def generate_scitask(cls: Type[T], hashed: bool = True) -> Type[T]:
     def _scicd_on_success(task):
         """Handle checkpointing and remote pushing."""
         # If hashed, save the fingerprint first
-        print("AM I HASHED", hashed)
         if hashed:
-            print("GENERATING FINGERPRINTS")
-            print(luigi.task.flatten(task.output()))
-            print(task.output().path)
             current_fp = task.get_fingerprint()
             for ot in luigi.task.flatten(task.output()):
-                print("INSIDE", ot)
-                print("INSIDE", ot.path)
                 if hasattr(ot, "path"):
                     p = Path(ot.path)
                     fp_dir = p.parent / ".luigi_fingerprints"

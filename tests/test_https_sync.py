@@ -28,20 +28,15 @@ class MockStorageHandler(BaseHTTPRequestHandler):
     storage_path = None
 
     def do_GET(self):
-        print("STORAGE: ", self.storage_path)
         rel_path = self.path.lstrip("/")
-        print("GETTING REL: ", rel_path)
         full_path = self.storage_path / rel_path
-        print("GETTING: ", full_path)
 
         if full_path.exists() and full_path.is_file():
-            print("GOTIT")
             self.send_response(200)
             self.end_headers()
             with open(full_path, "rb") as f:
                 self.wfile.write(f.read())
         else:
-            print("DID NOT GET IT")
             self.send_response(404)
             self.end_headers()
 

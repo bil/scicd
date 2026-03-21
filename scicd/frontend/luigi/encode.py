@@ -102,7 +102,7 @@ class LuigiAdapter(BaseAdapter):
              '--params', '{"date": "2024-01-01"}',
              '--frontend', 'luigi']
         """
-        
+
         return [
             "scicd",
             "run",
