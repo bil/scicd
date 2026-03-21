@@ -66,6 +66,13 @@ def get_task_config(task: luigi.Task) -> "scicd.config.TaskConfig":
     if isinstance(resources, dict):
         overrides = deep_update(overrides, _normalize_luigi_resources(resources))
 
+    if task.retry_count:
+        overrides["retry"] = int(task.retry_count)
+    if task.worker_timeout:  # in seconds
+        overrides["timeout"] = scicd.config.TaskConfig.validate_time(
+            int(task.worker_timeout / 60)
+        )
+
     # `scicd` dict attribute (highest priority)
     if hasattr(task, "scicd"):
         scicd_attr = getattr(task, "scicd")

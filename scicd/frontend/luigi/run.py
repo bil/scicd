@@ -38,7 +38,8 @@ def run_task(module: str, family: str, params: str):
 
     # Instantiate and Execute via Luigi
     try:
-        task_instance = task_cls.from_str_params(param_dict)
+        print(param_dict)
+        task_instance = task_cls(**param_dict)  # .from_str_params(param_dict)
     except Exception as e:
         rich.print(
             f"[bold red]Error:[/bold red] Could not instantiate task '{family}' with params {param_dict}"
