@@ -83,7 +83,7 @@ def test_gitlab_yml_lint_and_json_params(tmp_path):
     assert params["id"] == 123
 
 
-def test_slice_node_child_yml_generation(tmp_path, mocker):
+def test_slice_node_child_yml_generation():
     """
     Verifies that SliceNode correctly generates child pipeline configurations.
 
