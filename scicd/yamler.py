@@ -143,7 +143,7 @@ def load_yaml(path: str, **kwargs: Any) -> Dict[str, Any]:
     rendered = env.from_string(post.content).render(context)
     data: Dict[str, Any] = yaml.safe_load(rendered) or {}
 
-    return expand_vars(data)
+    return data
 
 
 def slugify(text: str) -> str:
