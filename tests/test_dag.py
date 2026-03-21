@@ -5,7 +5,7 @@ Tests for the Directed Acyclic Graph (DAG) construction and rendering.
 from scicd.dag import BijectNode, SliceNode, DAG
 from scicd.adapter import BaseAdapter
 from scicd.config import TaskConfig
-from scicd.backend.gitlab import render_node_gitlab, render_gitlab
+from scicd.backend.gitlab.decode import render_node_gitlab, render_gitlab
 
 
 class MockAdapter(BaseAdapter):

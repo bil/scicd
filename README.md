@@ -16,11 +16,12 @@ By separating the **Frontend** (task dependency frameworks like Luigi) from the 
 The SciCD repository is organized into several key directories:
 
 * **`scicd/`**: The core library containing the execution engine, DAG logic, and platform adapters.
-    * `adapter.py`: Bridges between frontends (e.g., Luigi) and the SciCD engine.
+    * `adapter.py`: Abstract bridge definitions for frontends.
     * `build.py`: Orchestrates the construction of the DAG and rendering to backends.
     * `config.py`: Strictly typed configuration management for workspaces and tasks.
     * `dag.py`: Defines abstract DAG nodes (`BijectNode`, `SliceNode`).
-    * `gitlab.py`: Backend implementation for generating GitLab CI/CD pipelines.
+    * `frontend/`: Contains specific task framework integrations (e.g., `luigi.py`).
+    * `backend/`: Contains specific CI/CD platform generators (e.g., `gitlab.py`).
     * `remote.py`: Logic for syncing task states with remote storage.
     * `task.py`: Augmented Luigi tasks with hashing and lifecycle hooks.
 * **`tests/`**: Comprehensive test suite for all components, ensuring reliability and correctness.

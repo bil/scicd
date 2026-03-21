@@ -3,29 +3,13 @@ Universal Build Entrypoint for SciCD.
 """
 
 from __future__ import annotations
-import importlib
 import dataclasses
-from typing import Dict, List, Tuple
 
-import luigi
 import rich
-from luigi.cmdline_parser import CmdlineParser
 
 import scicd.config
 
-from scicd.config import get_workspace
-from scicd.dag import DAG, BaseNode, SliceNode, BijectNode
-from scicd.frontend.luigi import luigi2dag
-from scicd.backend.gitlab import export_gitlab
-
-# =============================================================================
-# BACKENDS (DAG -> Output)
-# =============================================================================
-
-
-def export_dot(dag: DAG, filepath: str = "dag.dot"):
-    """Exports the DAG to Graphviz for visualization."""
-    dag.export_dot(filepath)
+from scicd.frontend.luigi.encode import luigi2dag
 
 
 # =============================================================================
@@ -115,17 +99,6 @@ def build(
         raise ValueError(f"Unsupported frontend: {frontend}")
 
     # BACKEND
-    if backend == "gitlab":
-        out_path = filepath or ".gitlab-ci.yml"
-        export_gitlab(dag, out_path)
-        rich.print(
-            f"[bold green]SciCD:[/bold green] Generated GitLab CI pipeline at {out_path}"
-        )
-    elif backend == "dot":
-        out_path = filepath or "dag.dot"
-        export_dot(dag, out_path)
-        rich.print(
-            f"[bold green]SciCD:[/bold green] Generated Graphviz DOT file at {out_path}"
-        )
-    else:
-        raise ValueError(f"Unsupported backend: {backend}")
+    from scicd.backend.export import export_dag
+    export_dag(dag, filepath=filepath, backend=backend)
+    rich.print(f"[bold green]SciCD:[/bold green] Generated {backend} output")

@@ -4,7 +4,7 @@ Tests for converting Luigi task trees into SciCD DAGs.
 
 import luigi
 from pathlib import Path
-from scicd.task import SciTask
+from scicd.frontend.luigi.task import SciTask
 from scicd.build import luigi2dag
 from scicd.dag import BijectNode
 import scicd.config

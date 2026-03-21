@@ -10,7 +10,9 @@ SciCD bridges the gap between local Python-based workflow development and high-s
 
 - [Getting Started](getting-started.md): Installation and your first pipeline.
 - **Project Structure**:
-  - `scicd/`: Core engine and adapters.
+  - `scicd/`: Core engine, configuration, and abstract DAG nodes.
+  - `scicd/frontend/`: Framework integrations (e.g., Luigi).
+  - `scicd/backend/`: CI/CD platform generators (e.g., GitLab).
   - `tests/`: Comprehensive test suite.
   - `docs/`: Extensive documentation.
   - `.scicd/`: Workspace-specific extensions.

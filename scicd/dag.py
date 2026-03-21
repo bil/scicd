@@ -3,8 +3,7 @@ Module docstring.
 """
 
 from __future__ import annotations  # Put this at the very top of your file
-import json
-from typing import List, Dict, Any
+from typing import List
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 
@@ -50,15 +49,6 @@ class BaseNode(ABC):
         # We take all values from the node_deps dict and flatten them
         all_ids = [node.identifier for node in self.node_deps]
         return sorted(list(set(all_ids)))
-
-    def to_gitlab(self) -> List[Dict[str, Any]]:
-        """
-        Render computation into Gitlab CI/CD jobs
-        """
-        import scicd.backend.gitlab
-
-        return scicd.backend.gitlab.render_node_gitlab(self)
-
 
 @dataclass
 class BijectNode(BaseNode):
@@ -109,20 +99,6 @@ class DAG:
 
     def __init__(self, nodes: List[BaseNode]):
         self.nodes = nodes
-
-    def render_gitlab(self, **boilerplate) -> dict:
-        "Generate .gitlab-ci.yml file"
-        import scicd.backend.gitlab
-
-        return scicd.backend.gitlab.render_gitlab(self, **boilerplate)
-
-    def write_gitlab_yaml(self, filepath: str = ".gitlab-ci.yml", **boilerplate):
-        """Writes the rendered dict to a file."""
-        import scicd.backend.gitlab
-
-        return scicd.backend.gitlab.write_gitlab_yaml(
-            self, filepath=filepath, **boilerplate
-        )
 
     def export_dot(self, filepath: str):
         """Generate .dot file of DAG"""

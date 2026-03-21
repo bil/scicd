@@ -6,7 +6,7 @@ import luigi
 import pytest
 from pathlib import Path
 
-from scicd.task import SciTask
+from scicd.frontend.luigi.task import SciTask
 from scicd.config import reset_config, TaskConfig
 
 
@@ -33,14 +33,14 @@ def test_task_properties(mocker, tmp_path):
     and that fingerprints include code commit, parameters, and configuration.
     """
     reset_config()
-    mocker.patch("scicd.task.get_git_commit", return_value="abc1234")
+    mocker.patch("scicd.frontend.luigi.task.get_git_commit", return_value="abc1234")
     mocker.patch("scicd.config.cascading_config", return_value={"window": 5})
 
     task_config = TaskConfig(
         remote={"url": "a-wonderful-splendid-url", "root": str(tmp_path / "root")},
         user={"cascade_path": "an-arbitrary-path"},
     )
-    mocker.patch("scicd.task.get_task_config", return_value=task_config)
+    mocker.patch("scicd.frontend.luigi.task.get_task_config", return_value=task_config)
 
     task = MyMockTask(param="test")
 
@@ -57,7 +57,7 @@ def test_task_complete(mocker, tmp_path):
     """
     reset_config()
     # Mock commit for fingerprint
-    mocker.patch("scicd.task.get_git_commit", return_value="abc1234")
+    mocker.patch("scicd.frontend.luigi.task.get_git_commit", return_value="abc1234")
     # Mock config for fingerprint
     mocker.patch("scicd.config.cascading_config", return_value={"window": 5})
 
@@ -70,7 +70,7 @@ def test_task_complete(mocker, tmp_path):
         user={"cascade_path": "i-could-write-anything"},
     )
 
-    mocker.patch("scicd.task.get_task_config", return_value=task_config)
+    mocker.patch("scicd.frontend.luigi.task.get_task_config", return_value=task_config)
 
     task = MyMockTask(param="test_complete")
 
@@ -106,8 +106,8 @@ def test_event_handlers_and_sync(mocker, tmp_path):
             "push_outputs": True,
         },
     )
-    mocker.patch("scicd.task.get_task_config", return_value=task_config)
-    mocker.patch("scicd.task.get_git_commit", return_value="abc1234")
+    mocker.patch("scicd.frontend.luigi.task.get_task_config", return_value=task_config)
+    mocker.patch("scicd.frontend.luigi.task.get_git_commit", return_value="abc1234")
     mocker.patch("scicd.config.cascading_config", return_value={})
 
     task = MyMockTask(param="handler_test")
@@ -155,8 +155,8 @@ MyMockTask:
     task_config = TaskConfig(user={"cascade_path": str(cascade_file)})
     # mock_task_config = mocker.MagicMock()
     # mock_task_config.user.cascade_path = str(cascade_file)
-    mocker.patch("scicd.task.get_task_config", return_value=task_config)
-    mocker.patch("scicd.task.get_git_commit", return_value="abc")
+    mocker.patch("scicd.frontend.luigi.task.get_task_config", return_value=task_config)
+    mocker.patch("scicd.frontend.luigi.task.get_git_commit", return_value="abc")
 
     # Test lookup from nested central file
     task1 = MyMockTask(param="normal")
@@ -241,8 +241,10 @@ def test_luigi_lifecycle_and_events(mocker, tmp_path):
     mock_task_config.remote.root = str(tmp_path)
     mock_task_config.remote.pull_inputs = True
     mock_task_config.remote.push_outputs = True
-    mocker.patch("scicd.task.get_task_config", return_value=mock_task_config)
-    mocker.patch("scicd.task.get_git_commit", return_value="abc1234")
+    mocker.patch(
+        "scicd.frontend.luigi.task.get_task_config", return_value=mock_task_config
+    )
+    mocker.patch("scicd.frontend.luigi.task.get_git_commit", return_value="abc1234")
 
     # Mock remote actions
     mock_pull = mocker.patch("scicd.remote.pull")
@@ -274,8 +276,10 @@ def test_local_opts_disable_remote(mocker, tmp_path):
     mock_task_config.remote.root = str(tmp_path)
     mock_task_config.remote.pull_inputs = True
     mock_task_config.remote.push_outputs = True
-    mocker.patch("scicd.task.get_task_config", return_value=mock_task_config)
-    mocker.patch("scicd.task.get_git_commit", return_value="abc1234")
+    mocker.patch(
+        "scicd.frontend.luigi.task.get_task_config", return_value=mock_task_config
+    )
+    mocker.patch("scicd.frontend.luigi.task.get_git_commit", return_value="abc1234")
 
     mock_pull = mocker.patch("scicd.remote.pull")
     mock_push = mocker.patch("scicd.remote.push")

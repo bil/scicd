@@ -10,9 +10,6 @@ from typing import Optional, List, Dict, Any, Union, Literal, Tuple
 from types import SimpleNamespace
 from dataclasses import dataclass, field, fields, asdict
 
-
-import yaml
-
 from scicd.yamler import deep_update, load_yaml
 
 

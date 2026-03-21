@@ -7,7 +7,7 @@ import json
 from scicd.dag import DAG, BijectNode, SliceNode
 from scicd.adapter import BaseAdapter
 from scicd.config import TaskConfig, ConcurrencyConfig
-from scicd.backend.gitlab import render_node_gitlab, write_gitlab_yaml
+from scicd.backend.gitlab.decode import render_node_gitlab, write_gitlab_yaml
 
 
 class MockAdapter(BaseAdapter):

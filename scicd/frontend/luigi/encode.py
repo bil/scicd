@@ -11,7 +11,7 @@ import luigi
 from luigi.cmdline_parser import CmdlineParser
 
 import scicd.config
-import scicd.task
+from scicd.frontend.luigi import task as scicd_task
 from scicd.yamler import slugify
 from scicd.adapter import BaseAdapter
 from scicd.dag import DAG, BaseNode, SliceNode, BijectNode
@@ -85,7 +85,7 @@ class LuigiAdapter(BaseAdapter):
         if hasattr(self.work, "task_config"):
             return self.work.task_config
 
-        return scicd.task.get_task_config(self.work)
+        return scicd_task.get_task_config(self.work)
 
     @property
     def command(self) -> List[str]:

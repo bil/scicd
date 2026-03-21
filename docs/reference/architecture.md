@@ -2,9 +2,9 @@
 
 SciCD is designed around three core layers: Adapters, the abstract DAG, and Backends.
 
-## 1. Adapters (`scicd.adapter`)
+## 1. Adapters & Frontends (`scicd.frontend` & `scicd.adapter`)
 
-The bridge between a pipeline framework (like Luigi) and SciCD. Adapters handle framework-specific logic, extracting parameters and execution commands. They ensure that the core engine doesn't need to know the details of the underlying workflow tool.
+The bridge between a pipeline framework (like Luigi) and SciCD. The core `scicd.adapter` module provides an abstract `BaseAdapter`, while specific implementations (e.g., `LuigiAdapter`) and graph encoders exist in modules like `scicd.frontend.luigi`. They ensure that the core engine doesn't need to know the details of the underlying workflow tool.
 
 ## 2. DAG & Nodes (`scicd.dag`)
 
@@ -18,9 +18,9 @@ A `BijectNode` represents a direct 1:1 mapping from a single unit of work (e.g.,
 
 A `SliceNode` represents a dynamic fan-out execution. It groups multiple units of work together and uses a "generator" job to scatter them across a set of parallel workers. This is ideal for large-scale data processing where you might have thousands of small tasks that you want to execute concurrently across a fixed number of CI/CD runners.
 
-## 3. Backends (`scicd.build`)
+## 3. Backends (`scicd.backend`)
 
-Backends render the abstract DAG into platform-specific configurations.
+Backends render the abstract DAG into platform-specific configurations. Implementations live in `scicd.backend` (e.g., `scicd.backend.gitlab`).
 
 - **GitLab CI/CD**: Renders nodes into jobs, stages, and child pipelines (for `SliceNode`).
 - **Graphviz DOT**: Renders the DAG into a visual graph format.

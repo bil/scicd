@@ -11,7 +11,7 @@ from pathlib import Path
 
 import luigi
 import pytest
-from scicd.task import SciTask
+from scicd.frontend.luigi.task import SciTask
 from scicd.config import WorkspaceConfig, TaskConfig, reset_config
 
 # =============================================================================
@@ -147,7 +147,7 @@ def test_https_push_on_success(mocker, tmp_path, http_server):
         }
     )
     mocker.patch("scicd.config.get_task_config", return_value=task_cfg)
-    mocker.patch("scicd.task.get_git_commit", return_value="abc")
+    mocker.patch("scicd.frontend.luigi.task.get_git_commit", return_value="abc")
 
     task = VanillaTask(name="vanilla", out_dir=str(tmp_path))
     success = luigi.build([task], local_scheduler=True)
@@ -221,7 +221,7 @@ def test_https_sync(mocker, tmp_path, http_server):
         }
     )
     mocker.patch("scicd.config.get_task_config", return_value=task_cfg)
-    mocker.patch("scicd.task.get_git_commit", return_value="abc")
+    mocker.patch("scicd.frontend.luigi.task.get_git_commit", return_value="abc")
 
     # 1. Run HashTask to push to remote
     task = HashedTask(name="secure", out_dir=str(tmp_path))
