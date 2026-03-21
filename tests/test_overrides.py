@@ -45,7 +45,7 @@ def test_task_config_merge_casting():
     assert merged.memory == "128Gi"
 
 
-def test_build_namespaced_parsing(mocker):
+def test_build_namespaced_parsing(mocker, tmp_path):
     """
     Verifies that the build() entrypoint correctly separates task-,
     and native parameters, and blocks workspace overrides.
@@ -68,16 +68,21 @@ def test_build_namespaced_parsing(mocker):
         "remote.root": "/data",
     }
 
-    build(module="mod", target="Fam", **kwargs)
+    build(
+        module="mod",
+        target="Fam",
+        filepath=str(tmp_path / ".gitlab-ci.yml"),
+        **kwargs,
+    )
 
-    # 1. Check task overrides were applied to ConfigManager
+    # Check task overrides were applied to ConfigManager
     base_task = _ConfigManager.get_base_task()
     assert base_task.cpu == 4
     assert base_task.image == "alpine"
     assert base_task.remote.pull_inputs is True
     assert base_task.remote.flags == "['--test']"
 
-    # 2. Check native params were passed to the frontend
+    # Check native params were passed to the frontend
     # TaskA-date and global-param should be passed through
     _, call_kwargs = mock_luigi2dag.call_args
     assert "TaskA-date" in call_kwargs

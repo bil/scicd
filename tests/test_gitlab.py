@@ -63,14 +63,14 @@ def test_gitlab_yml_lint_and_json_params(tmp_path):
     out_file = tmp_path / ".gitlab-ci.yml"
     write_gitlab_yaml(dag, filepath=str(out_file), image="python:3.10")
 
-    # 1. Lint: Check if it's valid YAML
+    # Lint: Check if it's valid YAML
     with open(out_file, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
 
     assert config["image"] == "python:3.10"
     assert "MyTask_123" in config
 
-    # 2. JSON Validation: Assert that --params in script is valid JSON
+    # JSON Validation: Assert that --params in script is valid JSON
     job_script = config["MyTask_123"]["script"][0]
     assert "--params" in job_script
 
