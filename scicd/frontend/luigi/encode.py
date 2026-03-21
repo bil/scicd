@@ -96,20 +96,26 @@ class LuigiAdapter(BaseAdapter):
             Command array for subprocess execution
 
         Example:
-            ['scicd', 'run-luigi',
+            ['scicd', 'run',
              '--module', 'workflow',
              '--family', 'MyTask',
-             '--params', '{"date": "2024-01-01"}']
+             '--params', '{"date": "2024-01-01"}',
+             '--frontend', 'luigi']
         """
+        import json
+        import shlex
+        
         return [
             "scicd",
-            "run-luigi",
+            "run",
             "--module",
             self.work.__class__.__module__,
             "--family",
             self.name,
             "--params",
-            json.dumps(self.params),
+            f"'{json.dumps(self.params)}'",
+            "--frontend",
+            "luigi",
         ]
 
     @property

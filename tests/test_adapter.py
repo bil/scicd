@@ -49,24 +49,28 @@ def test_luigi_adapter_properties(mocker):
 
 def test_luigi_adapter_command():
     """
-    Asserts that the adapter generates the correct 'scicd run-luigi' shell command.
+    Asserts that the adapter generates the correct 'scicd run' shell command.
 
-    It verifies that the command includes the necessary module, family, and
-    correctly serialized JSON parameters.
+    It verifies that the command includes the necessary module, family,
+    frontend flag, and correctly serialized JSON parameters.
     """
     task = DummyTask(date="2024-01-01")
     adapter = LuigiAdapter(task)
     cmd = adapter.command
 
     assert cmd[0] == "scicd"
-    assert cmd[1] == "run-luigi"
+    assert cmd[1] == "run"
     assert "--module" in cmd
     assert "--family" in cmd
     assert "DummyTask" in cmd
+    assert "--frontend" in cmd
+    assert "luigi" in cmd
 
     # check that params is a valid json string
     params_idx = cmd.index("--params") + 1
-    params_dict = json.loads(cmd[params_idx])
+    # Strip the single quotes around the json string
+    params_str = cmd[params_idx].strip("'")
+    params_dict = json.loads(params_str)
     assert params_dict == {"date": "2024-01-01"}
 
 
