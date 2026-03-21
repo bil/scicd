@@ -1,3 +1,7 @@
+"""
+Tests for the configuration file discovery logic.
+"""
+
 import pytest
 from scicd.config import find_config_path, _ConfigManager, reset_config
 

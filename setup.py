@@ -15,14 +15,9 @@ setup(
         "cyclopts>=4.10.0",
         "tomli>=2.0.1",
         "rich>=13.7.1",
-        "requests>=2.31.0"
+        "requests>=2.31.0",
     ],
-    extras_require={
-        "test": [
-            "pytest>=9.0.0",
-            "pytest-mock>=3.12.0"
-        ]
-    },
+    extras_require={"test": ["pytest>=9.0.0", "pytest-mock>=3.12.0"]},
     entry_points={
         "console_scripts": [
             "scicd=scicd.cli:app",

@@ -1,3 +1,7 @@
+"""
+Tests for CLI-based configuration overrides and parameter parsing.
+"""
+
 from scicd.config import TaskConfig, _ConfigManager
 from scicd.build import build
 
@@ -16,7 +20,7 @@ def test_task_config_runtime_defaults(mocker):
 
     # Apply runtime override
     merged = base_task.merge({"cpu": 8, "memory": "32Gi"})
-    _ConfigManager._base_task = merged
+    _ConfigManager.set_base_task(merged)
 
     # Check that new base is updated
     assert _ConfigManager.get_base_task().cpu == 8

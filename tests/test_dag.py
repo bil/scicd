@@ -1,9 +1,18 @@
+"""
+Tests for the Directed Acyclic Graph (DAG) construction and rendering.
+"""
+
 from scicd.dag import BijectNode, SliceNode, DAG
 from scicd.adapter import BaseAdapter
 from scicd.config import TaskConfig
+from scicd.backend.gitlab import render_node_gitlab, render_gitlab
 
 
 class MockAdapter(BaseAdapter):
+    """
+    A mock adapter for testing DAG node properties and GitLab job generation.
+    """
+
     def __init__(self, name, params, identifier):
         self._name = name
         self._params = params
@@ -59,7 +68,7 @@ def test_biject_node_to_gitlab():
 
     node = BijectNode(work=[adapter], rank=1, node_deps=[dep_node])
 
-    jobs = node.to_gitlab()
+    jobs = render_node_gitlab(node)
     assert len(jobs) == 1
     job = jobs[0]["MyTask_1"]
     assert job["stage"] == "stage_1"
@@ -97,7 +106,7 @@ def test_slice_node_to_gitlab():
     adapter2 = MockAdapter("MyTask", {"id": 2}, "MyTask_2")
     node = SliceNode(work=[adapter1, adapter2], rank=1, node_deps=[])
 
-    jobs = node.to_gitlab()
+    jobs = render_node_gitlab(node)
     assert len(jobs) == 2
 
     gen_id = "MyTask_rank1_gen"
@@ -126,7 +135,7 @@ def test_dag_render_gitlab():
     node2 = BijectNode(work=[adapter2], rank=1, node_deps=[node1])
 
     dag = DAG([node1, node2])
-    pipeline = dag.render_gitlab(image="python:3.9")
+    pipeline = render_gitlab(dag, image="python:3.9")
 
     assert pipeline["image"] == "python:3.9"
     assert pipeline["stages"] == ["stage_0", "stage_1"]

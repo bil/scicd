@@ -1,3 +1,7 @@
+"""
+Tests for the core SciTask lifecycle, fingerprinting, and event handlers.
+"""
+
 import luigi
 import pytest
 from pathlib import Path
@@ -7,6 +11,10 @@ from scicd.config import reset_config, TaskConfig
 
 
 class MyMockTask(SciTask):
+    """
+    A mock SciTask used for testing properties, completion logic, and event handlers.
+    """
+
     param = luigi.Parameter()
 
     @property
@@ -161,6 +169,10 @@ MyMockTask:
 
 
 class ExternalInput(luigi.ExternalTask):
+    """
+    A mock external task for lifecycle integration tests.
+    """
+
     id = luigi.IntParameter()
     base_path = luigi.Parameter(default=".")
 
@@ -169,6 +181,10 @@ class ExternalInput(luigi.ExternalTask):
 
 
 class LeafTask(SciTask):
+    """
+    A mock leaf task for lifecycle integration tests.
+    """
+
     id = luigi.IntParameter()
     base_path = luigi.Parameter(default=".")
 
@@ -188,6 +204,10 @@ class LeafTask(SciTask):
 
 
 class RootTask(SciTask):
+    """
+    A mock root task for lifecycle integration tests.
+    """
+
     base_path = luigi.Parameter(default=".")
 
     def requires(self):

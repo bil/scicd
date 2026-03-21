@@ -1,3 +1,7 @@
+"""
+Tests for the SciCD configuration models and cascading logic.
+"""
+
 import pytest
 from scicd.config import (
     TaskConfig,

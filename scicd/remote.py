@@ -102,7 +102,11 @@ def pull_full() -> bool:
     """
     task_config = scicd.config.get_task_config()
 
-    if not task_config.remote or not task_config.remote.url or not task_config.remote.root:
+    if (
+        not task_config.remote
+        or not task_config.remote.url
+        or not task_config.remote.root
+    ):
         print("No remote path configured. Skipping pull-full.")
         return True
 
@@ -121,7 +125,10 @@ def pull_full() -> bool:
 
 
 def _https_batch(
-    task_config: scicd.config.TaskConfig, wspace: scicd.config.WorkspaceConfig, files: List[Path], direction="push"
+    task_config: scicd.config.TaskConfig,
+    wspace: scicd.config.WorkspaceConfig,
+    files: List[Path],
+    direction="push",
 ) -> bool:
     """HTTPS implementation using requests Session for connection pooling."""
     if (

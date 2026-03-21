@@ -1,3 +1,7 @@
+"""
+Integration tests for HTTPS-based remote storage synchronization.
+"""
+
 import os
 import json
 import threading
@@ -17,7 +21,7 @@ from scicd.config import WorkspaceConfig, TaskConfig, reset_config
 
 class MockStorageHandler(BaseHTTPRequestHandler):
     """
-    A simple handler that stores uploaded files in a local tmp folder.
+    A simple HTTP handler that stores uploaded files in a local temporary folder.
     """
 
     # This must be set before use
@@ -80,6 +84,10 @@ def http_server(tmp_path_factory):
 
 
 class VanillaTask(SciTask):
+    """
+    A basic SciTask implementation for testing standard output synchronization.
+    """
+
     name = luigi.Parameter()
     out_dir = luigi.Parameter()
 
@@ -93,6 +101,10 @@ class VanillaTask(SciTask):
 
 
 class HashedTask(SciTask):
+    """
+    A SciTask implementation that uses custom output pathing for fingerprint testing.
+    """
+
     name = luigi.Parameter()
     out_dir = luigi.Parameter()
 

@@ -1,11 +1,20 @@
+"""
+Integration tests for GitLab CI/CD YAML generation and linting.
+"""
+
 import yaml
 import json
 from scicd.dag import DAG, BijectNode, SliceNode
 from scicd.adapter import BaseAdapter
 from scicd.config import TaskConfig, ConcurrencyConfig
+from scicd.backend.gitlab import render_node_gitlab, write_gitlab_yaml
 
 
 class MockAdapter(BaseAdapter):
+    """
+    A mock adapter to simulate task properties for GitLab YAML generation.
+    """
+
     def __init__(self, name, params, identifier, cfg=None):
         self._name = name
         self._params = params
@@ -47,7 +56,7 @@ def test_gitlab_yml_lint_and_json_params(tmp_path):
     dag = DAG([node])
 
     out_file = tmp_path / ".gitlab-ci.yml"
-    dag.write_gitlab_yaml(filepath=str(out_file), image="python:3.10")
+    write_gitlab_yaml(dag, filepath=str(out_file), image="python:3.10")
 
     # 1. Lint: Check if it's valid YAML
     with open(out_file, "r") as f:
@@ -84,7 +93,7 @@ def test_slice_node_child_yml_generation(tmp_path, mocker):
     adapter2 = MockAdapter("Task", {"id": 2}, "Task_2", cfg=cfg)
 
     node = SliceNode(work=[adapter1, adapter2], rank=0, node_deps=[])
-    jobs = node.to_gitlab()
+    jobs = render_node_gitlab(node)
 
     # The first job is the generator
     gen_job_id = next(k for k in jobs[0].keys())

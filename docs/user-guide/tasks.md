@@ -13,26 +13,26 @@ Through global event handlers, SciCD intercepts the task lifecycle:
 
 This feature is "transparent" and applies to any task inheriting from `luigi.Task`, provided remote syncing is enabled in your configuration.
 
-## Utility: `HashTask`
+## Utility: `SciTask`
 
-While you can use standard tasks, SciCD provides the `HashTask` utility to solve common scientific computing challenges: standardized pathing and content-based completion.
+While you can use standard tasks, SciCD provides the `SciTask` utility to solve common scientific computing challenges: standardized pathing and content-based completion.
 
 ### 1. Hash-Based Completion
 
-Standard Luigi tasks are considered "complete" if their output file exists. `HashTask` augments this by checking a **fingerprint**. A task is only complete if the output exists *and* the fingerprint matches the current:
+Standard Luigi tasks are considered "complete" if their output file exists. `SciTask` augments this by checking a **fingerprint**. A task is only complete if the output exists *and* the fingerprint matches the current:
 
 - **Code Version** (Git commit hash)
 - **Task Parameters**
 - **Cascading Configuration** (Insignificant parameters from YAML)
 
 ### 2. Standardized Pathing
-`HashTask` provides an `output_path` helper that automatically anchors your task's data within the workspace's remote root.
+`SciTask` provides an `output_path` helper that automatically anchors your task's data within the workspace's remote root.
 
 ```python
-from scicd.task import HashTask
+from scicd.task import SciTask
 import luigi
 
-class ProcessData(HashTask):
+class ProcessData(SciTask):
     @property
     def path(self):
         # Resulting path: <remote_root>/my_experiment/results
@@ -49,7 +49,7 @@ class ProcessData(HashTask):
 
 ## Centralized Parameter Management
 
-For large pipelines, managing individual YAML files for every task can be cumbersome. `HashTask` supports a centralized parameter model via your `scicd.yaml` configuration.
+For large pipelines, managing individual YAML files for every task can be cumbersome. `SciTask` supports a centralized parameter model via your `scicd.yaml` configuration.
 
 ### Configuration
 
@@ -81,12 +81,12 @@ pipelines:
         window: 10
 ```
 
-When `cascade_path` is defined, `HashTask` will automatically look for its configuration within that file, namespaced by its class name (and optionally prefixed by `cascade_root`).
+When `cascade_path` is defined, `SciTask` will automatically look for its configuration within that file, namespaced by its class name (and optionally prefixed by `cascade_root`).
 
-## Summary: Standard vs. HashTask
+## Summary: Standard vs. SciTask
 
 
-| Feature | `luigi.Task` | `HashTask` |
+| Feature | `luigi.Task` | `SciTask` |
 | :--- | :---: | :---: |
 | **Remote Syncing** | ✅ (Global) | ✅ (Global) |
 | **File-based Completion** | ✅ | ✅ |

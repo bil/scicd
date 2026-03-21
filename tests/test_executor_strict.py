@@ -1,3 +1,7 @@
+"""
+Tests for strict tag matching in the executor registry.
+"""
+
 import pytest
 from scicd.executor import (
     register_executor,

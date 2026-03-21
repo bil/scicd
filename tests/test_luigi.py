@@ -1,3 +1,7 @@
+"""
+Tests for converting Luigi task trees into SciCD DAGs.
+"""
+
 import luigi
 from pathlib import Path
 from scicd.task import SciTask
@@ -7,6 +11,10 @@ import scicd.config
 
 
 class ExternalInput(luigi.ExternalTask):
+    """
+    A mock external Luigi task that provides input files for testing.
+    """
+
     id = luigi.IntParameter()
     base_path = luigi.Parameter(default=".")
 
@@ -15,6 +23,10 @@ class ExternalInput(luigi.ExternalTask):
 
 
 class LeafTask(SciTask):
+    """
+    A simple SciTask that depends on an external input.
+    """
+
     id = luigi.IntParameter()
     base_path = luigi.Parameter(default=".")
 
@@ -34,6 +46,10 @@ class LeafTask(SciTask):
 
 
 class RootTask(SciTask):
+    """
+    A SciTask that aggregates multiple leaf tasks into a tree.
+    """
+
     base_path = luigi.Parameter(default=".")
 
     def requires(self):

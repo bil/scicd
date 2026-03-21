@@ -9,11 +9,16 @@ SciCD bridges the gap between local Python-based workflow development and high-s
 ## Navigation
 
 - [Getting Started](getting-started.md): Installation and your first pipeline.
+- **Project Structure**:
+  - `scicd/`: Core engine and adapters.
+  - `tests/`: Comprehensive test suite.
+  - `docs/`: Extensive documentation.
+  - `.scicd/`: Workspace-specific extensions.
 - **User Guide**:
   - [Configuration](user-guide/configuration.md): Workspace and Task settings.
   - [Build Process](user-guide/build.md): Turning workflows into CI/CD.
   - [CLI & Overrides](user-guide/cli.md): Command line power usage.
-  - [Task Development](user-guide/tasks.md): Writing robust tasks with HashTask.
+  - [Task Development](user-guide/tasks.md): Writing robust tasks with SciTask.
   - **Reference**:
   - [Architecture](reference/architecture.md): How SciCD works under the hood.
   - **Project Info**:

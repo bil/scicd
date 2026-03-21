@@ -3,16 +3,12 @@ Module docstring.
 """
 
 from __future__ import annotations  # Put this at the very top of your file
-from copy import deepcopy
 import json
 from typing import List, Dict, Any
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from abc import ABC, abstractmethod
 
-import yaml
-
 import scicd.yamler
-import scicd.gitlab
 import scicd.adapter
 
 
@@ -55,11 +51,13 @@ class BaseNode(ABC):
         all_ids = [node.identifier for node in self.node_deps]
         return sorted(list(set(all_ids)))
 
-    @abstractmethod
     def to_gitlab(self) -> List[Dict[str, Any]]:
         """
         Render computation into Gitlab CI/CD jobs
         """
+        import scicd.backend.gitlab
+
+        return scicd.backend.gitlab.render_node_gitlab(self)
 
 
 @dataclass
@@ -82,17 +80,6 @@ class BijectNode(BaseNode):
             return f"{self.work[0].name}\\n({param_str})"
         else:
             return self.work[0].name
-
-    def to_gitlab(self) -> List[dict]:
-        # I changed return type to dict because 1 node = 1 job usually
-        job = scicd.gitlab.gitlab_info(self.work[0].cfg)
-        job["stage"] = f"stage_{self.rank}"
-        job["script"] = [" ".join(self.work[0].command)]
-
-        if self.needs:
-            job["needs"] = self.needs
-
-        return [{self.identifier: job}]
 
 
 @dataclass
@@ -117,62 +104,6 @@ class SliceNode(BaseNode):
             label_lines.append(f"[{param_str}]" if param_str else "[]")
         return "\\n".join(label_lines)
 
-    def to_gitlab(self) -> List[Dict[str, Any]]:
-        # Extract commands from all work units
-        all_commands = [adapter.command for adapter in self.work]
-        commands_json = json.dumps(all_commands)
-
-        # Use the configuration from the first work unit as the basis
-        cfg = self.work[0].cfg
-        
-        def _json_default(o):
-            from types import SimpleNamespace
-            if isinstance(o, SimpleNamespace):
-                return vars(o)
-            return str(o)
-            
-        cfg_json = json.dumps(asdict(cfg), default=_json_default)
-
-        # Serialize platform-specific boilerplate
-        gitlab_info = scicd.gitlab.gitlab_info(cfg)
-        gitlab_info_json = json.dumps(gitlab_info)
-
-        gen_id = f"{self.name}_rank{self.rank}_gen"
-
-        # Generator Job: Dynamically creates the child pipeline YAML
-        gen_job = deepcopy(gitlab_info)
-        gen_job["stage"] = f"stage_{self.rank}"
-
-        gen_job["script"] = [
-            f"python3 -m scicd.slice generate "
-            f"--family {self.name} "
-            f"--commands-json '{commands_json}' "
-            f"--cfg-json '{cfg_json}' "
-            f"--gitlab-info-json '{gitlab_info_json}' "
-            f"--gen-id '{gen_id}'"
-        ]
-        gen_job["artifacts"] = {"paths": ["manifest.yml", "child_pipeline.yml"]}
-
-        if self.needs:
-            gen_job["needs"] = self.needs
-
-        # Trigger Job: Launches the child pipeline generated above
-        trigger_job = {
-            "stage": f"stage_{self.rank}",
-            "variables": {"PARENT_PIPELINE_ID": "$CI_PIPELINE_ID"},
-            "trigger": {
-                "include": [{"artifact": "child_pipeline.yml", "job": gen_id}],
-                "strategy": "depend",
-                "forward": {
-                    "pipeline_variables": True,
-                    "yaml_variables": True,
-                },
-            },
-            "needs": [gen_id],
-        }
-
-        return [{gen_id: gen_job}, {self.identifier: trigger_job}]
-
 
 class DAG:
 
@@ -181,33 +112,17 @@ class DAG:
 
     def render_gitlab(self, **boilerplate) -> dict:
         "Generate .gitlab-ci.yml file"
-        pipeline = deepcopy(boilerplate)
-        all_jobs = {}
+        import scicd.backend.gitlab
 
-        # Actual work
-        for node in self.nodes:
-            for job_dict in node.to_gitlab():
-                all_jobs.update(job_dict)
-
-        # Identify functional stages
-        unique_stages = sorted(
-            {body["stage"] for body in all_jobs.values() if "stage" in body},
-            key=lambda x: int(x.split("_")[1]) if "_" in x else 0,
-        )
-
-        pipeline["stages"] = unique_stages
-        pipeline.update(all_jobs)
-        return pipeline
+        return scicd.backend.gitlab.render_gitlab(self, **boilerplate)
 
     def write_gitlab_yaml(self, filepath: str = ".gitlab-ci.yml", **boilerplate):
         """Writes the rendered dict to a file."""
-        with open(filepath, "w", encoding="utf-8") as f:
-            yaml.dump(
-                self.render_gitlab(**boilerplate),
-                f,
-                sort_keys=False,
-                default_flow_style=False,
-            )
+        import scicd.backend.gitlab
+
+        return scicd.backend.gitlab.write_gitlab_yaml(
+            self, filepath=filepath, **boilerplate
+        )
 
     def export_dot(self, filepath: str):
         """Generate .dot file of DAG"""

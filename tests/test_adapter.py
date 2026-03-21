@@ -1,11 +1,19 @@
+"""
+Tests for the LuigiAdapter class, which bridges Luigi tasks and scicd's configuration.
+"""
+
 import json
 import luigi
 import scicd.config
-from scicd.adapter import LuigiAdapter
+from scicd.frontend.luigi import LuigiAdapter
 from scicd.config import TaskConfig
 
 
 class DummyTask(luigi.Task):
+    """
+    A dummy Luigi task used for testing property extraction and configuration overrides.
+    """
+
     date = luigi.Parameter()
 
     def resources(self):
@@ -77,6 +85,10 @@ def test_luigi_adapter_identifier():
 
 
 class SimpleTask(luigi.Task):
+    """
+    A minimal Luigi task with no resource definitions, used for default value testing.
+    """
+
     pass
 
 

@@ -1,3 +1,7 @@
+"""
+Tests for the executor discovery and registration mechanism.
+"""
+
 from scicd.executor import reset_executors, get_executor
 from scicd.config import TaskConfig
 

@@ -700,6 +700,11 @@ class _ConfigManager:
         return cls._base_task
 
     @classmethod
+    def set_base_task(cls, task: TaskConfig):
+        """Manually set the base task configuration singleton."""
+        cls._base_task = task
+
+    @classmethod
     def reset(cls):
         """Reset all cached config (for testing)."""
         cls._workspace = None
@@ -728,6 +733,19 @@ def get_base_task() -> TaskConfig:
         TaskConfig singleton instance (defaults)
     """
     return _ConfigManager.get_base_task()
+
+
+def set_base_task(task: TaskConfig):
+    """
+    Manually set the base task configuration singleton.
+
+    This is useful for applying global overrides (e.g., from the CLI)
+    that should affect all subsequently created TaskConfig objects.
+
+    Args:
+        task: The new base TaskConfig instance.
+    """
+    _ConfigManager.set_base_task(task)
 
 
 def get_task_config(**overrides) -> TaskConfig:
