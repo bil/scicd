@@ -2,9 +2,11 @@
 Integration tests for GitLab CI/CD YAML generation and linting.
 """
 
-import yaml
 import json
 import shlex
+
+import yaml
+
 from scicd.dag import DAG, BijectNode, SliceNode
 from scicd.adapter import BaseAdapter
 from scicd.config import TaskConfig, ConcurrencyConfig, WorkspaceConfig
