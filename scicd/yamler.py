@@ -75,6 +75,29 @@ def deep_update(source: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[str, 
     return source
 
 
+def nest_dict(flat_dict: Dict[str, Any], delimiter: str = ".") -> Dict[str, Any]:
+    """
+    Converts a flat dictionary with delimited keys into a nested dictionary.
+
+    Example:
+        >>> nest_dict({"a.b.c": 1, "a.b.d": 2})
+        {'a': {'b': {'c': 1, 'd': 2}}}
+    """
+    nested: Dict[str, Any] = {}
+    for key, value in flat_dict.items():
+        parts = key.split(delimiter)
+        current = nested
+        for part in parts[:-1]:
+            if part not in current:
+                current[part] = {}
+            elif not isinstance(current[part], dict):
+                # Handle potential collisions where a key is both a leaf and a branch
+                current[part] = {"_value": current[part]}
+            current = current[part]
+        current[parts[-1]] = value
+    return nested
+
+
 def extract_context(path: str, **kwargs: Any) -> Dict[str, Any]:
     """
     Constructs a Jinja2 rendering context by recursively loading includes.

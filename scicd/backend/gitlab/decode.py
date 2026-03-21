@@ -2,6 +2,7 @@ import json
 from copy import deepcopy
 from typing import Any, Dict, List
 from dataclasses import asdict
+from types import SimpleNamespace
 
 import yaml
 
@@ -81,7 +82,6 @@ def render_node_gitlab(node: BaseNode) -> List[Dict[str, Any]]:
         cfg = node.work[0].cfg
 
         def _json_default(o):
-            from types import SimpleNamespace
 
             if isinstance(o, SimpleNamespace):
                 return vars(o)

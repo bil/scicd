@@ -14,7 +14,7 @@ import luigi
 import scicd.config
 import scicd.remote
 from scicd.git import get_git_commit
-from scicd.yamler import deep_update
+from scicd.yamler import deep_update, nest_dict
 
 T = TypeVar("T", bound=luigi.Task)
 
@@ -61,6 +61,7 @@ def get_task_config(task: luigi.Task) -> "scicd.config.TaskConfig":
             resources = resources()
         except TypeError:
             pass
+    resources = nest_dict(resources)  # expand dot notation
 
     if isinstance(resources, dict):
         overrides = deep_update(overrides, _normalize_luigi_resources(resources))
@@ -69,6 +70,7 @@ def get_task_config(task: luigi.Task) -> "scicd.config.TaskConfig":
     if hasattr(task, "scicd"):
         scicd_attr = getattr(task, "scicd")
         if isinstance(scicd_attr, dict):
+            scicd_attr = nest_dict(scicd_attr)
             overrides = deep_update(overrides, scicd_attr)
 
     return scicd.config.get_task_config(**overrides)

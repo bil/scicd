@@ -10,7 +10,7 @@ import rich
 import scicd.config
 
 from scicd.frontend.luigi.encode import luigi2dag
-
+from scicd.backend.export import export_dag
 
 # =============================================================================
 # UNIVERSAL BUILD ENTRYPOINT
@@ -38,16 +38,17 @@ def build(
                     For Luigi, use --TaskName-param val for task-specific params.
     """
 
+    wspace = scicd.config.get_workspace()
     if backend is None:
-        backend = scicd.config.get_workspace().platform
+        backend = wspace.platform
 
-    task_overrides = {}
+    from scicd.yamler import nest_dict
+
+    task_overrides_flat = {}
     frontend_params = {}
 
     # Valid keys for TaskConfig
     valid_task_keys = {f.name for f in dataclasses.fields(scicd.config.TaskConfig)}
-    # Keys that belong to WorkspaceConfig (we want to block these from direct CLI overrides)
-    protected_keys = {f.name for f in dataclasses.fields(scicd.config.WorkspaceConfig)}
 
     for k, v in kwargs.items():
         # Normalize key to use underscores for comparison (Cyclopts provides dashes)
@@ -55,13 +56,6 @@ def build(
         root_key = norm_k.split(".")[0]
 
         if root_key in valid_task_keys:
-            parts = norm_k.split(".")
-            current = task_overrides
-            for part in parts[:-1]:
-                if part not in current:
-                    current[part] = {}
-                current = current[part]
-
             # Simple type casting for CLI values
             if isinstance(v, str):
                 vl = v.lower()
@@ -72,16 +66,16 @@ def build(
                 elif vl.isdigit():
                     v = int(v)
 
-            current[parts[-1]] = v
-        elif root_key in protected_keys or root_key.startswith("workspace_"):
-            rich.print(
-                f"[bold red]Security Warning:[/bold red] Workspace override '{norm_k}' is not permitted via CLI. Ignoring."
-            )
+            task_overrides_flat[norm_k] = v
         else:
             frontend_params[k] = v
 
+    # Nest the overrides
+    task_overrides = nest_dict(task_overrides_flat)
+
     # 1. APPLY RUNTIME DEFAULTS
     if task_overrides:
+
         rich.print(
             f"[bold blue]SciCD:[/bold blue] Applying global TaskConfig overrides: {task_overrides}"
         )
@@ -102,7 +96,6 @@ def build(
         raise ValueError(f"Unsupported frontend: {frontend}")
 
     # BACKEND
-    from scicd.backend.export import export_dag
-
-    export_dag(dag, filepath=filepath, backend=backend)
+    boilerplate = wspace.cicd
+    export_dag(dag, filepath=filepath, backend=backend, **boilerplate)
     rich.print(f"[bold green]SciCD:[/bold green] Generated {backend} output")
