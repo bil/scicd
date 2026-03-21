@@ -26,6 +26,7 @@ Standard Luigi tasks are considered "complete" if their output file exists. `Sci
 - **Cascading Configuration** (Insignificant parameters from YAML)
 
 ### 2. Standardized Pathing
+
 `SciTask` provides an `output_path` helper that automatically anchors your task's data within the workspace's remote root.
 
 ```python
@@ -84,7 +85,6 @@ pipelines:
 When `cascade_path` is defined, `SciTask` will automatically look for its configuration within that file, namespaced by its class name (and optionally prefixed by `cascade_root`).
 
 ## Summary: Standard vs. SciTask
-
 
 | Feature | `luigi.Task` | `SciTask` |
 | :--- | :---: | :---: |
