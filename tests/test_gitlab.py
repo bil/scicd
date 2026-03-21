@@ -4,6 +4,7 @@ Integration tests for GitLab CI/CD YAML generation and linting.
 
 import yaml
 import json
+import shlex
 from scicd.dag import DAG, BijectNode, SliceNode
 from scicd.adapter import BaseAdapter
 from scicd.config import TaskConfig, ConcurrencyConfig
@@ -59,7 +60,7 @@ def test_gitlab_yml_lint_and_json_params(tmp_path):
     write_gitlab_yaml(dag, filepath=str(out_file), image="python:3.10")
 
     # 1. Lint: Check if it's valid YAML
-    with open(out_file, "r") as f:
+    with open(out_file, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
 
     assert config["image"] == "python:3.10"
@@ -69,10 +70,10 @@ def test_gitlab_yml_lint_and_json_params(tmp_path):
     job_script = config["MyTask_123"]["script"][0]
     assert "--params" in job_script
 
-    # Extract the JSON string from the command
-    # Command format: scicd run-luigi --params {"id": 123}
-    parts = job_script.split("--params ")
-    json_str = parts[1].strip()
+    # Use shlex to parse the command line safely
+    args = shlex.split(job_script)
+    idx = args.index("--params")
+    json_str = args[idx + 1]
 
     params = json.loads(json_str)
     assert params["id"] == 123

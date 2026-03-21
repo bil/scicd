@@ -1,4 +1,5 @@
 import json
+import shlex
 from copy import deepcopy
 from typing import Any, Dict, List
 from dataclasses import asdict
@@ -66,7 +67,7 @@ def render_node_gitlab(node: BaseNode) -> List[Dict[str, Any]]:
     if isinstance(node, BijectNode):
         job = gitlab_info(node.work[0].cfg)
         job["stage"] = f"stage_{node.rank}"
-        job["script"] = [" ".join(node.work[0].command)]
+        job["script"] = [shlex.join(node.work[0].command)]
 
         if node.needs:
             job["needs"] = node.needs
@@ -99,14 +100,24 @@ def render_node_gitlab(node: BaseNode) -> List[Dict[str, Any]]:
         gen_job = deepcopy(g_info)
         gen_job["stage"] = f"stage_{node.rank}"
 
-        gen_job["script"] = [
-            f"python3 -m scicd.slice generate "
-            f"--family {node.name} "
-            f"--commands-json '{commands_json}' "
-            f"--cfg-json '{cfg_json}' "
-            f"--gitlab-info-json '{gitlab_info_json}' "
-            f"--gen-id '{gen_id}'"
+        gen_command = [
+            "python3",
+            "-m",
+            "scicd.slice",
+            "generate",
+            "--family",
+            node.name,
+            "--commands-json",
+            commands_json,
+            "--cfg-json",
+            cfg_json,
+            "--gitlab-info-json",
+            gitlab_info_json,
+            "--gen-id",
+            gen_id,
         ]
+
+        gen_job["script"] = [shlex.join(gen_command)]
         gen_job["artifacts"] = {"paths": ["manifest.yml", "child_pipeline.yml"]}
 
         if node.needs:

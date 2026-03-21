@@ -111,7 +111,7 @@ class LuigiAdapter(BaseAdapter):
             "--family",
             self.name,
             "--params",
-            f"'{json.dumps(self.params)}'",
+            json.dumps(self.params),
             "--frontend",
             "luigi",
         ]
