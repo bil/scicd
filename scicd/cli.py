@@ -13,6 +13,7 @@ from cyclopts import App, Parameter
 
 import scicd.build
 import scicd.frontend.luigi.run
+import scicd.backend.run
 import scicd.config
 
 # App initialization with clear metadata
@@ -97,8 +98,6 @@ def lint_cicd(
     if backend is None:
         backend = scicd.config.get_workspace().platform
 
-    import scicd.backend.run
-
     if not scicd.backend.run.lint_pipeline(
         backend=backend, yml_filepath=yml_filepath, url=url, project=project
     ):
@@ -129,8 +128,6 @@ def run_pipeline(
     """
     if backend is None:
         backend = scicd.config.get_workspace().platform
-
-    import scicd.backend.run
 
     scicd.backend.run.run_pipeline(
         backend=backend, branch=branch, url=url, project=project, **variables
