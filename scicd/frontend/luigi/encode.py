@@ -58,9 +58,14 @@ class LuigiAdapter(BaseAdapter):
         Return task parameters as a serializable dict.
 
         Returns:
-            Dictionary of parameter values (all converted to strings)
+            Dictionary of significant parameter values (all converted to strings)
         """
-        return self.work.param_kwargs
+        params = self.work.to_str_params()
+        insignificant = set(params.keys()) - set(self.work.get_param_names())
+        for key in insignificant:
+            params.pop(key)
+
+        return params
 
     @property
     def cfg(self) -> scicd.config.TaskConfig:
