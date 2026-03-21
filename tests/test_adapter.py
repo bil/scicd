@@ -93,7 +93,6 @@ class SimpleTask(luigi.Task):
     A minimal Luigi task with no resource definitions, used for default value testing.
     """
 
-    pass
 
 
 def test_luigi_adapter_no_resources(mocker):

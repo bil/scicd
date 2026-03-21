@@ -24,6 +24,7 @@ class MockAdapter(BaseAdapter):
         self._params = params
         self._identifier = identifier
         self._cfg = cfg or TaskConfig(cpu=2)
+        super().__init__(None)
 
     @property
     def name(self):

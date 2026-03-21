@@ -17,6 +17,7 @@ class MockAdapter(BaseAdapter):
     def __init__(self, name, cfg):
         self._name = name
         self._cfg = cfg
+        super().__init__(None)
 
     @property
     def name(self):
