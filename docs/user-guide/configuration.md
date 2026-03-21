@@ -11,12 +11,12 @@ SciCD automatically searches for its configuration in the following order:
 3. **`.scicd/config.yaml`**
 4. **`.scicd/scicd.yaml`**
 
-## Workspace Configuration (`repository`, `remote`)
+## Workspace Configuration
 
-The `repository` section defines your source control platform, while `remote` handles data synchronization.
+The `workspace` section defines your source control platform, and any CI/CD boilerplate for your desired backend
 
 ```yaml
-repository:
+workspace:
   platform: gitlab
   url: https://gitlab.com
   project: org/repo

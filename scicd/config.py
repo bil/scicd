@@ -107,6 +107,71 @@ class QueueConfig:
 
 
 @dataclass
+class RemoteConfig:
+    """
+    Configuration for remote data synchronization.
+
+    SciCD uses this to automatically generate 'pull' and 'push' steps
+    within CI/CD jobs, ensuring data persistence across ephemeral workers.
+    """
+
+    root: Optional[str] = None
+    """
+    Local base directory for synchronization.
+    Only files within this directory will be synced to/from the remote.
+    """
+
+    url: Optional[str] = None
+    """
+    Remote storage destination.
+    Format depends on protocol (e.g., 's3://my-bucket/path' or 'rclone-remote:path').
+    """
+
+    protocol: Literal["rclone", "https"] = "rclone"
+    """
+    Transfer protocol to use.
+    - 'rclone': High-performance sync for various backends (S3, GCS, SFTP).
+    - 'https': Direct download/upload via HTTP.
+    """
+
+    flags: List[str] = field(default_factory=list)
+    """
+    Additional CLI flags passed to the underlying sync tool (e.g., ['--transfers=16']).
+    """
+
+    pull_inputs: bool = False
+    """
+    If True, SciCD generates a 'before_script' step to pull data from remote
+    before the task begins.
+    """
+
+    push_outputs: bool = False
+    """
+    If True, SciCD generates an 'after_script' step to push local results
+    to remote storage upon task completion.
+    """
+
+    def __post_init__(self):
+        if self.root:
+            self.root = str(Path(self.root).resolve())
+        valid_protocols = ["rclone", "https"]
+        if self.protocol not in valid_protocols:
+            raise ValueError(
+                f"protocol must be one of {valid_protocols}, got '{self.protocol}'"
+            )
+
+        if self.pull_inputs or self.push_outputs:
+            if not self.url:
+                raise ValueError(
+                    "remote.url is mandatory when pull_inputs or push_outputs is enabled"
+                )
+            if not self.root:
+                raise ValueError(
+                    "remote.root is mandatory when pull_inputs or push_outputs is enabled"
+                )
+
+
+@dataclass
 # pylint: disable=too-many-instance-attributes
 class TaskConfig:
     """
@@ -135,11 +200,6 @@ class TaskConfig:
     RAM allocation.
     Supported units: K/Ki, M/Mi, G/Gi, T/Ti (with optional 'B' suffix).
     Default: '8Gi'.
-    """
-
-    image: Optional[str] = None
-    """
-    Container image to use for this task.
     """
 
     disk: Optional[str] = None
@@ -183,7 +243,7 @@ class TaskConfig:
     # ===== Container/Runtime =====
     image: Optional[str] = None
     """
-    Docker/Singularity image URL to use for execution.
+    Container image to use for this task.
     """
 
     python_cmd: str = "python3"
@@ -204,7 +264,7 @@ class TaskConfig:
     """
 
     # ===== CI/CD Platform Config =====
-    cicd_config: Dict[str, Any] = field(default_factory=dict)
+    cicd: Dict[str, Any] = field(default_factory=dict)
     """
     Direct passthrough to the CI/CD YAML configuration (e.g., 'interruptible: true').
     """
@@ -220,6 +280,17 @@ class TaskConfig:
     queue: Union[QueueConfig, Dict[str, Any], None] = field(default_factory=QueueConfig)
     """
     Messaging queue settings, only relevant if concurrency.method='queue'.
+    """
+
+    remote: Union[RemoteConfig, Dict[str, Any]] = field(default_factory=RemoteConfig)
+    """
+    Remote storage configuration (S3/GCP/HTTPS).
+    """
+
+    user: Union[Dict[str, Any], SimpleNamespace] = field(default_factory=dict)
+    """
+    Extensible user-defined configuration.
+    Recursively converted to a SimpleNamespace for convenient dot-notation access.
     """
 
     def __post_init__(self):
@@ -242,6 +313,14 @@ class TaskConfig:
         # Auto-convert queue dict to QueueConfig
         if isinstance(self.queue, dict):
             self.queue = QueueConfig(**self.queue)
+
+        # Auto-convert remote dict to RemoteConfig
+        if isinstance(self.remote, dict):
+            self.remote = RemoteConfig(**self.remote)
+
+        # Convert user dict to namespace for dot-access
+        if isinstance(self.user, dict):
+            self.user = _dict_to_namespace(self.user)
 
         # Validate that queue config exists if using queue concurrency
         if self.concurrency.method == "queue":
@@ -474,70 +553,7 @@ def _dict_to_namespace(d: Any) -> Any:
 
 
 @dataclass
-class RemoteConfig:
-    """
-    Configuration for remote data synchronization.
-
-    SciCD uses this to automatically generate 'pull' and 'push' steps
-    within CI/CD jobs, ensuring data persistence across ephemeral workers.
-    """
-
-    root: Optional[str] = None
-    """
-    Local base directory for synchronization.
-    Only files within this directory will be synced to/from the remote.
-    """
-
-    url: Optional[str] = None
-    """
-    Remote storage destination.
-    Format depends on protocol (e.g., 's3://my-bucket/path' or 'rclone-remote:path').
-    """
-
-    protocol: Literal["rclone", "https"] = "rclone"
-    """
-    Transfer protocol to use.
-    - 'rclone': High-performance sync for various backends (S3, GCS, SFTP).
-    - 'https': Direct download/upload via HTTP.
-    """
-
-    flags: List[str] = field(default_factory=list)
-    """
-    Additional CLI flags passed to the underlying sync tool (e.g., ['--transfers=16']).
-    """
-
-    pull_inputs: bool = False
-    """
-    If True, SciCD generates a 'before_script' step to pull data from remote
-    before the task begins.
-    """
-
-    push_outputs: bool = False
-    """
-    If True, SciCD generates an 'after_script' step to push local results
-    to remote storage upon task completion.
-    """
-
-    def __post_init__(self):
-        valid_protocols = ["rclone", "https"]
-        if self.protocol not in valid_protocols:
-            raise ValueError(
-                f"protocol must be one of {valid_protocols}, got '{self.protocol}'"
-            )
-
-        if self.pull_inputs or self.push_outputs:
-            if not self.url:
-                raise ValueError(
-                    "remote.url is mandatory when pull_inputs or push_outputs is enabled"
-                )
-            if not self.root:
-                raise ValueError(
-                    "remote.root is mandatory when pull_inputs or push_outputs is enabled"
-                )
-
-
-@dataclass
-class RepositoryConfig:
+class WorkspaceConfig:
     """
     Configuration for the source control and CI/CD platform.
 
@@ -572,57 +588,6 @@ class RepositoryConfig:
             raise ValueError(
                 f"platform must be one of {valid_platforms}, got '{self.platform}'"
             )
-
-        if not self.url:
-            raise ValueError("repository.url is mandatory")
-        if not self.project:
-            raise ValueError("repository.project is mandatory")
-
-
-@dataclass
-class WorkspaceConfig:
-    """
-    Root configuration for a SciCD project workspace.
-
-    Defines the environment where SciCD operates, including source control
-    integration, remote storage sync, and custom user extensions.
-    """
-
-    repository: Union[RepositoryConfig, Dict[str, Any]] = field(
-        default_factory=RepositoryConfig
-    )
-    """
-    Platform configuration (GitLab/GitHub).
-    Required for CI/CD pipeline generation.
-    """
-
-    remote: Union[RemoteConfig, Dict[str, Any], None] = None
-    """
-    Global remote storage defaults.
-    If specified, provides the fallback configuration for task-level sync.
-    """
-
-    user: Union[Dict[str, Any], SimpleNamespace] = field(default_factory=dict)
-    """
-    Extensible user-defined configuration.
-    Recursively converted to a SimpleNamespace for convenient dot-notation access.
-    """
-
-    def __post_init__(self):
-        """
-        Auto-convert nested dictionaries to structured dataclasses.
-        """
-        # Convert repository dict to dataclass
-        if isinstance(self.repository, dict):
-            self.repository = RepositoryConfig(**self.repository)
-
-        # Convert remote dict to dataclass
-        if self.remote is not None and isinstance(self.remote, dict):
-            self.remote = RemoteConfig(**self.remote)
-
-        # Convert user dict to namespace for dot-access
-        if isinstance(self.user, dict):
-            self.user = _dict_to_namespace(self.user)
 
 
 # ================================== HELPERS =================================
@@ -686,8 +651,7 @@ def load_config(config_path: Optional[Union[str, Path]] = None) -> Dict[str, Any
     if not path.exists():
         raise FileNotFoundError(f"Config file not found: {path}")
 
-    with open(path, encoding="utf-8") as f:
-        config = yaml.safe_load(f)
+    config = load_yaml(path)
 
     return config or {}
 
@@ -696,37 +660,50 @@ class _ConfigManager:
     """Internal config manager."""
 
     _workspace: Optional[WorkspaceConfig] = None
-    _base_task_config: Optional[TaskConfig] = None
+    _base_task: Optional[TaskConfig] = None
+
+    @classmethod
+    def _initialize(cls):
+        if (_ConfigManager._workspace is None) or (_ConfigManager._base_task is None):
+            config_dict = load_config()
+            ws_data = {}
+            task_data = {}
+
+            ws_fields = {f"workspace.{f.name}" for f in fields(WorkspaceConfig)}
+            task_fields = {f.name for f in fields(TaskConfig)}
+
+            for key, val in config_dict.items():
+                if key == "workspace":
+                    for key2, val2 in config_dict["workspace"].items():
+                        ws_data[key2] = val2
+                elif key in task_fields:
+                    task_data[key] = val
+                else:
+                    raise ValueError(
+                        f"Unexpected configuration {key};",
+                        f"Workspace configurations: {sorted(ws_fields)}",
+                        f"Task configurations: {sorted(task_fields)}",
+                    )
+
+            cls._workspace = WorkspaceConfig(**ws_data)
+            cls._base_task = TaskConfig(**task_data)
 
     @classmethod
     def get_workspace(cls) -> WorkspaceConfig:
         """Get workspace singleton."""
-        if cls._workspace is None:
-            config_dict = load_config()
-            # The 'task' key provides defaults for TaskConfig, not WorkspaceConfig.
-            ws_dict = {k: v for k, v in config_dict.items() if k != "task"}
-            cls._workspace = WorkspaceConfig(**ws_dict)
+        cls._initialize()
         return cls._workspace
 
     @classmethod
-    def get_base_task_config(cls) -> TaskConfig:
-        """Get base task config singleton (defaults from task: section)."""
-        if cls._base_task_config is None:
-            config_dict = load_config()
-            task_dict = config_dict.get("task", {})
-            cls._base_task_config = TaskConfig(**task_dict)
-        return cls._base_task_config
-
-    @classmethod
-    def set_runtime_defaults(cls, overrides: Dict[str, Any]):
-        """Inject global overrides that apply to all TaskConfig instances."""
-        cls._base_task_config = cls.get_base_task_config().merge(overrides)
+    def get_base_task(cls) -> TaskConfig:
+        cls._initialize()
+        return cls._base_task
 
     @classmethod
     def reset(cls):
         """Reset all cached config (for testing)."""
         cls._workspace = None
-        cls._base_task_config = None
+        cls._base_task = None
 
 
 def get_workspace() -> WorkspaceConfig:
@@ -741,11 +718,23 @@ def get_workspace() -> WorkspaceConfig:
     return _ConfigManager.get_workspace()
 
 
+def get_base_task() -> TaskConfig:
+    """
+    Get base task configuration singleton.
+
+    Loaded once from .scicd/config.yaml and cached.
+
+    Returns:
+        TaskConfig singleton instance (defaults)
+    """
+    return _ConfigManager.get_base_task()
+
+
 def get_task_config(**overrides) -> TaskConfig:
     """
     Get TaskConfig with optional runtime overrides.
 
-    Starts with base defaults from .scicd/config.yaml task: section,
+    Starts with base defaults from WorkspaceConfig,
     then applies any overrides using the merge() method.
 
     Args:
@@ -753,32 +742,15 @@ def get_task_config(**overrides) -> TaskConfig:
 
     Returns:
         TaskConfig instance with overrides applied
-
-    Examples:
-        >>> # Get base defaults
-        >>> config = get_task_config()
-        >>> config.cpu
-        1
-
-        >>> # Override specific fields
-        >>> config = get_task_config(cpu=16, memory='64Gi')
-        >>> config.cpu
-        16
-
-        >>> # Override nested fields
-        >>> config = get_task_config(
-        ...     concurrency={'method': 'queue', 'workers': 10},
-        ...     tags=['slurm', 'gpu']
-        ... )
     """
-    # Start with cached base defaults
-    base_config = _ConfigManager.get_base_task_config()
+    # Start with cached base defaults from workspace
+    task_config = get_base_task()
 
     # Apply overrides if provided
     if overrides:
-        return base_config.merge(overrides)
+        return task_config.merge(overrides)
 
-    return base_config
+    return task_config
 
 
 def reset_config():
@@ -819,7 +791,7 @@ def cascading_config(
     if root_key:
         if isinstance(root_key, str):
             root_key = [root_key]
-        
+
         for k in root_key:
             cfg = cfg.get(k, {})
 

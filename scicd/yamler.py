@@ -17,10 +17,11 @@ from jinja2 import Environment
 T = TypeVar("T")
 
 
-def yml_suffix(path: str) -> str:
+def yml_suffix(path: str | pathlib.Path) -> str:
     """
     Ensures a path has a valid YAML suffix by checking existence or appending default.
     """
+    path = str(path)
     valid_suffixes = [".yml", ".yaml", ".yml.j2", ".yaml.j2"]
     if any(path.endswith(s) for s in valid_suffixes):
         return path

@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 from pathlib import Path
 import scicd.remote
-from scicd.config import WorkspaceConfig, RemoteConfig
+from scicd.config import WorkspaceConfig, TaskConfig, RemoteConfig
 
 
 def test_remote_pull_full_rclone(mocker):
@@ -13,7 +13,10 @@ def test_remote_pull_full_rclone(mocker):
     WorkspaceConfig into a valid system-level 'rclone copy' command.
     """
     ws = WorkspaceConfig(
-        repository={"platform": "gitlab", "url": "x", "project": "y"},
+        **{"platform": "gitlab", "url": "x", "project": "y"},
+    )
+    mocker.patch("scicd.config.get_workspace", return_value=ws)
+    task_config = TaskConfig(
         remote={
             "protocol": "rclone",
             "url": "s3://bucket",
@@ -21,7 +24,7 @@ def test_remote_pull_full_rclone(mocker):
             "flags": ["--verbose"],
         },
     )
-    mocker.patch("scicd.config.get_workspace", return_value=ws)
+    mocker.patch("scicd.config.get_task_config", return_value=task_config)
     mock_sub = mocker.patch("subprocess.check_call")
 
     assert scicd.remote.pull_full() is True
@@ -38,10 +41,13 @@ def test_remote_pull_full_unsupported(mocker):
     HTTPS protocols are limited to surgical, file-by-file pulls.
     """
     ws = WorkspaceConfig(
-        repository={"platform": "gitlab", "url": "x", "project": "y"},
-        remote={"protocol": "https", "url": "http://example.com", "root": "/data"},
+        **{"platform": "gitlab", "url": "x", "project": "y"},
     )
     mocker.patch("scicd.config.get_workspace", return_value=ws)
+    task_config = TaskConfig(
+        remote={"protocol": "https", "url": "http://example.com", "root": "/data"},
+    )
+    mocker.patch("scicd.config.get_task_config", return_value=task_config)
 
     with pytest.raises(NotImplementedError):
         scicd.remote.pull_full()
@@ -56,10 +62,13 @@ def test_remote_push_rclone(mocker):
     rclone via the --files-from manifest protocol.
     """
     ws = WorkspaceConfig(
-        repository={"platform": "gitlab", "url": "x", "project": "y"},
-        remote={"protocol": "rclone", "url": "s3://bucket", "root": "/data"},
+        **{"platform": "gitlab", "url": "x", "project": "y"},
     )
     mocker.patch("scicd.config.get_workspace", return_value=ws)
+    task_config = TaskConfig(
+        remote={"protocol": "rclone", "url": "s3://bucket", "root": "/data"},
+    )
+    mocker.patch("scicd.config.get_task_config", return_value=task_config)
     mock_sub = mocker.patch("subprocess.check_call")
 
     # Pass a path that is within /data
@@ -76,10 +85,13 @@ def test_remote_push_rclone(mocker):
 def test_remote_push_out_of_root(mocker):
     """Verify that files outside the workspace root are NOT pushed."""
     ws = WorkspaceConfig(
-        repository={"platform": "gitlab", "url": "x", "project": "y"},
-        remote={"protocol": "rclone", "url": "s3://bucket", "root": "/data"},
+        **{"platform": "gitlab", "url": "x", "project": "y"},
     )
     mocker.patch("scicd.config.get_workspace", return_value=ws)
+    task_config = TaskConfig(
+        remote={"protocol": "rclone", "url": "s3://bucket", "root": "/data"},
+    )
+    mocker.patch("scicd.config.get_task_config", return_value=task_config)
     mock_sub = mocker.patch("subprocess.check_call")
 
     # Path outside /data
@@ -102,14 +114,17 @@ def test_remote_pull_https(mocker, tmp_path):
     root_dir.mkdir()
 
     ws = WorkspaceConfig(
-        repository={"platform": "gitlab", "url": "x", "project": "y"},
+        **{"platform": "gitlab", "url": "x", "project": "y"},
+    )
+    mocker.patch("scicd.config.get_workspace", return_value=ws)
+    task_config = TaskConfig(
         remote={
             "protocol": "https",
             "url": "http://example.com",
             "root": str(root_dir),
         },
     )
-    mocker.patch("scicd.config.get_workspace", return_value=ws)
+    mocker.patch("scicd.config.get_task_config", return_value=task_config)
 
     mock_session = MagicMock()
     mock_resp = MagicMock()

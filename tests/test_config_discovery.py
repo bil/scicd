@@ -62,10 +62,10 @@ def test_config_manager_discovery(tmp_path, monkeypatch):
 
     config_file = tmp_path / "scicd.yaml"
     config_file.write_text(
-        "repository: {platform: gitlab, url: x, project: y}", encoding="utf-8"
+        "workspace: {platform: gitlab, url: x, project: y}", encoding="utf-8"
     )
 
     ws = _ConfigManager.get_workspace()
-    assert ws.repository.platform == "gitlab"
+    assert ws.platform == "gitlab"
 
     reset_config()

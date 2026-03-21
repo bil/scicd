@@ -2,16 +2,11 @@ import pytest
 from scicd.config import (
     TaskConfig,
     WorkspaceConfig,
-    RepositoryConfig,
-    RemoteConfig,
-    QueueConfig,
     ConcurrencyConfig,
     get_task_config,
-    cascade,
-    get_workspace,
     _ConfigManager,
+    cascade,
 )
-import scicd.config
 
 
 def test_task_config_validation():
@@ -68,20 +63,19 @@ def test_concurrency_config():
 def test_workspace_config():
     """
     Ensures that the root WorkspaceConfig can be correctly parsed from
-    its constituent Repository and Remote components.
+    its constituent components, and fails if task configs are passed.
     """
     ws = WorkspaceConfig(
-        repository={
+        **{
             "platform": "github",
             "url": "https://github.com",
             "project": "org/repo",
-        },
-        remote={"protocol": "rclone", "url": "s3://bucket", "root": "/data"},
+        }
     )
-    assert isinstance(ws.repository, RepositoryConfig)
-    assert ws.repository.platform == "github"
-    assert isinstance(ws.remote, RemoteConfig)
-    assert ws.remote.protocol == "rclone"
+    assert ws.platform == "github"
+
+    with pytest.raises(TypeError):
+        WorkspaceConfig(cpu=4)
 
 
 def test_cascade():
@@ -96,6 +90,9 @@ def test_cascade():
         {"match": {"env": "prod"}, "config": {"b": 3, "c": 4}},
         {"match": {"env": "dev"}, "config": {"a": 0}},
     ]
+    out = cascade(config, override, env="prod")
+    assert out["a"] == 1
+    assert out["b"] == 3
 
 
 def test_get_task_config_overrides(mocker):
@@ -106,7 +103,7 @@ def test_get_task_config_overrides(mocker):
     the provided manual overrides on top of it.
     """
     _ConfigManager.reset()
-    mocker.patch("scicd.config.load_config", return_value={"task": {"cpu": 2}})
+    mocker.patch("scicd.config.load_config", return_value={"cpu": 2})
     cfg = get_task_config(memory="16Gi")
     assert cfg.cpu == 2
     assert cfg.memory == "16Gi"

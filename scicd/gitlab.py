@@ -55,8 +55,8 @@ def gitlab_info(cfg: TaskConfig) -> dict:
         info["timeout"] = str(cfg.timeout)
 
     # Any direct CI/CD passthrough config (interruptible, resource_group, etc)
-    if cfg.cicd_config:
-        info = scicd.yamler.deep_update(info, dict(cfg.cicd_config))
+    if cfg.cicd:
+        info = scicd.yamler.deep_update(info, dict(cfg.cicd))
 
     return info
 
@@ -95,15 +95,18 @@ def lint_pipeline(yml_filepath: str = ".gitlab-ci.yml") -> bool:
     # Grab the global workspace config
     workspace = get_workspace()
 
-    if not workspace.repository or workspace.repository.platform != "gitlab":
-        raise RuntimeError("Workspace repository is not configured for GitLab.")
+    if workspace.platform != "gitlab":
+        raise RuntimeError(
+            "Workspace is not configured for GitLab",
+            f"(workspace.platform = {workspace.platform})",
+        )
 
-    url = workspace.repository.url
-    project_path = workspace.repository.project
+    url = workspace.url
+    project_path = workspace.project
 
     if not project_path or not url:
         raise RuntimeError(
-            "Missing repository 'url' or 'project' in .scicd/config.yaml"
+            "Missing 'url' or 'project' in workspace configuration"
         )
 
     # Connect to GitLab and get the project context
@@ -113,7 +116,7 @@ def lint_pipeline(yml_filepath: str = ".gitlab-ci.yml") -> bool:
     except gitlab.exceptions.GitlabGetError as e:
         raise RuntimeError(
             f"Could not find GitLab project: '{project_path}' at {url}.\n"
-            f"Check repository configuration in .scicd/config.yaml."
+            f"Check workspace configuration!"
         ) from e
 
     # Send the content to the project-level CI Linter
@@ -164,15 +167,18 @@ def run_pipeline(branch: str = None, **pipeline_vars):
     # Grab the global config
     workspace = get_workspace()
 
-    if not workspace.repository or workspace.repository.platform != "gitlab":
-        raise RuntimeError("Workspace repository is not configured for GitLab.")
+    if workspace.platform != "gitlab":
+        raise RuntimeError(
+            "Workspace is not configured for GitLab",
+            f"(workspace.platform = {workspace.platform})"
+        )
 
-    url = workspace.repository.url
-    project_path = workspace.repository.project
+    url = workspace.url
+    project_path = workspace.project
 
     if not project_path or not url:
         raise RuntimeError(
-            "Missing repository 'url' or 'project' in .scicd/config.yaml"
+            "Missing 'url' or 'project' in workspace configuration"
         )
 
     # Connect to GitLab
@@ -182,7 +188,7 @@ def run_pipeline(branch: str = None, **pipeline_vars):
     except gitlab.exceptions.GitlabGetError as e:
         raise RuntimeError(
             f"Could not find GitLab project: '{project_path}' at {url}.\n"
-            f"Check repository configuration in .scicd/config.yaml."
+            f"Check workspace configuration."
         ) from e
 
     # Resolve branch

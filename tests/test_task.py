@@ -1,66 +1,68 @@
 import luigi
+import pytest
 from pathlib import Path
 
-from scicd.task import (
-    HashTask,
-    _ensure_output_dirs,
-    _checkpoint_task,
-    _pull_inputs_on_start,
-    _push_outputs_on_success,
-)
+from scicd.task import SciTask
+from scicd.config import reset_config, TaskConfig
 
 
-class MyMockTask(HashTask):
+class MyMockTask(SciTask):
     param = luigi.Parameter()
 
     @property
     def path(self):
-        return "my_path"
+        return f"tmp/{self.param}"
 
     def output(self):
         return luigi.LocalTarget(str(self.output_path / f"out_{self.param}.txt"))
 
 
-def test_hash_task_properties(mocker):
+def test_task_properties(mocker, tmp_path):
     """
-    Verifies the fundamental properties of a HashTask.
+    Verifies the fundamental properties of a SciTask.
 
     Checks that output paths are correctly derived from the workspace root
     and that fingerprints include code commit, parameters, and configuration.
     """
+    reset_config()
     mocker.patch("scicd.task.get_git_commit", return_value="abc1234")
-    mocker.patch("scicd.task.cascading_config", return_value={"window": 5})
+    mocker.patch("scicd.config.cascading_config", return_value={"window": 5})
 
-    mock_ws = mocker.MagicMock()
-    mock_ws.remote.root = "/tmp/root"
-    mocker.patch("scicd.task.get_workspace", return_value=mock_ws)
+    task_config = TaskConfig(
+        remote={"url": "a-wonderful-splendid-url", "root": str(tmp_path / "root")},
+        user={"cascade_path": "an-arbitrary-path"},
+    )
+    mocker.patch("scicd.task.get_task_config", return_value=task_config)
 
     task = MyMockTask(param="test")
 
-    assert str(task.output_path) == "/tmp/root/my_path"
+    assert str(task.output_path) == str(tmp_path / "root/tmp/test")
     assert task.cfg.window == 5
 
     fp = task.get_fingerprint()
     assert len(fp) == 12
 
 
-def test_hash_task_complete(mocker, tmp_path):
+def test_task_complete(mocker, tmp_path):
     """
-    Verifies the fingerprint-based completion logic of HashTask.
-
-    A task is only considered complete if:
-    1. The output file exists.
-    2. A corresponding fingerprint file exists.
-    3. The fingerprint file content matches the current task hash.
+    Verifies the fingerprint-based completion logic of SciTask.
     """
+    reset_config()
     # Mock commit for fingerprint
     mocker.patch("scicd.task.get_git_commit", return_value="abc1234")
     # Mock config for fingerprint
-    mocker.patch("scicd.task.cascading_config", return_value={"window": 5})
+    mocker.patch("scicd.config.cascading_config", return_value={"window": 5})
 
-    mock_ws = mocker.MagicMock()
-    mock_ws.remote.root = str(tmp_path)
-    mocker.patch("scicd.task.get_workspace", return_value=mock_ws)
+    task_config = TaskConfig(
+        remote={
+            "url": "a-wonderful-splendid-url",
+            "root": str(tmp_path / "root"),
+            "pull_inputs": False,
+        },
+        user={"cascade_path": "i-could-write-anything"},
+    )
+
+    mocker.patch("scicd.task.get_task_config", return_value=task_config)
 
     task = MyMockTask(param="test_complete")
 
@@ -82,63 +84,42 @@ def test_hash_task_complete(mocker, tmp_path):
     assert task.complete()
 
 
-def test_event_handlers(mocker, tmp_path):
+def test_event_handlers_and_sync(mocker, tmp_path):
     """
-    Verifies that task event handlers perform their side effects correctly.
+    Verifies that the factory-generated task event handlers perform their side effects correctly.
+    """
+    reset_config()
 
-    - _ensure_output_dirs must create the parent directories for outputs.
-    - _checkpoint_task must write the fingerprint file upon success.
-    """
-    # Test _ensure_output_dirs
-    mock_ws = mocker.MagicMock()
-    mock_ws.remote.root = str(tmp_path)
-    mocker.patch("scicd.task.get_workspace", return_value=mock_ws)
+    task_config = TaskConfig(
+        remote={
+            "url": "a-wonderful-splendid-url",
+            "root": str(tmp_path),
+            "pull_inputs": False,
+            "push_outputs": True,
+        },
+    )
+    mocker.patch("scicd.task.get_task_config", return_value=task_config)
+    mocker.patch("scicd.task.get_git_commit", return_value="abc1234")
+    mocker.patch("scicd.config.cascading_config", return_value={})
 
     task = MyMockTask(param="handler_test")
 
-    _ensure_output_dirs(task)
+    # Call the START handler (should create dirs)
+    task.trigger_event(luigi.Event.START, task)
     out_file = Path(task.output().path)
     assert out_file.parent.exists()
 
-    # Test _checkpoint_task
-    mocker.patch("scicd.task.get_git_commit", return_value="abc1234")
-    mocker.patch("scicd.task.cascading_config", return_value={})
+    # Call the SUCCESS handler (should checkpoint and push)
+    mock_push = mocker.patch("scicd.remote.push")
+    task.trigger_event(luigi.Event.SUCCESS, task)
+    # task.run()
 
-    _checkpoint_task(task)
+    print("OUT_FILE", out_file)
+
     fp_file = out_file.parent / ".luigi_fingerprints" / f"{out_file.name}.fingerprint"
+
     assert fp_file.exists()
     assert fp_file.read_text() == task.get_fingerprint()
-
-
-def test_global_pull_push(mocker):
-    """
-    Verifies the global pull/push triggers for generic Luigi tasks.
-
-    Ensures that when remote syncing is enabled, any task entering START 
-    will trigger a pull of its inputs, and any task reaching SUCCESS 
-    will trigger a push of its outputs.
-    """
-    mock_ws = mocker.MagicMock()
-    mock_ws.remote.pull_inputs = True
-    mock_ws.remote.push_outputs = True
-    mocker.patch("scicd.task.get_workspace", return_value=mock_ws)
-
-    mock_pull = mocker.patch("scicd.remote.pull")
-    mock_push = mocker.patch("scicd.remote.push")
-
-    class DummyTask(luigi.Task):
-        def input(self):
-            return luigi.LocalTarget("in.txt")
-
-        def output(self):
-            return luigi.LocalTarget("out.txt")
-
-    task = DummyTask()
-
-    _pull_inputs_on_start(task)
-    mock_pull.assert_called_once()
-
-    _push_outputs_on_success(task)
     mock_push.assert_called_once()
 
 
@@ -147,32 +128,145 @@ def test_centralized_cascading_config(mocker, tmp_path):
     Verifies that HashTask correctly uses a centralized configuration file
     with potentially multi-level nested keys.
     """
-    # 1. Create a centralized config file with nested keys
+    reset_config()
+    # Create a centralized config file with nested keys
     cascade_file = tmp_path / "global_params.yaml"
     cascade_file.write_text(
         """
-pipelines:
-  v1:
-    MyMockTask:
-      config:
+MyMockTask:
+    config:
         window: 10
-      override:
+    override:
         - match: { param: "special" }
           config: { window: 99 }
 """,
         encoding="utf-8",
     )
 
-    # 2. Mock workspace to point to this file and define the hierarchy
-    mock_ws = mocker.MagicMock()
-    mock_ws.user.path_cascade = str(cascade_file)
-    # We tell HashTask to drill into ['pipelines', 'v1', <Family>]
-    mock_ws.user.cascade_root = ["pipelines", "v1"]
-    
-    mocker.patch("scicd.task.get_workspace", return_value=mock_ws)
+    # Mock task_config to point to this file and define the hierarchy
+    task_config = TaskConfig(user={"cascade_path": str(cascade_file)})
+    # mock_task_config = mocker.MagicMock()
+    # mock_task_config.user.cascade_path = str(cascade_file)
+    mocker.patch("scicd.task.get_task_config", return_value=task_config)
     mocker.patch("scicd.task.get_git_commit", return_value="abc")
 
-    # 3. Test lookup from nested central file
-    task = MyMockTask(param="normal")
-    assert task.cfg.window == 10
+    # Test lookup from nested central file
+    task1 = MyMockTask(param="normal")
+    print("CONFIG CONFIG CONFIG!!!!!!!!!!!!!!!!!!", task1.cfg)
+    assert task1.cfg.window == 10
 
+    # 4. Test override matching from central file
+    task2 = MyMockTask(param="special")
+    assert task2.cfg.window == 99
+
+
+class ExternalInput(luigi.ExternalTask):
+    id = luigi.IntParameter()
+    base_path = luigi.Parameter(default=".")
+
+    def output(self):
+        return luigi.LocalTarget(str(Path(self.base_path) / f"external_{self.id}.txt"))
+
+
+class LeafTask(SciTask):
+    id = luigi.IntParameter()
+    base_path = luigi.Parameter(default=".")
+
+    def requires(self):
+        return ExternalInput(id=self.id, base_path=self.base_path)
+
+    @property
+    def path(self):
+        return f"leaf_{self.id}"
+
+    def output(self):
+        return luigi.LocalTarget(str(self.output_path / "done.txt"))
+
+    def run(self):
+        with self.output().open("w") as f:
+            f.write("done")
+
+
+class RootTask(SciTask):
+    base_path = luigi.Parameter(default=".")
+
+    def requires(self):
+        return [
+            LeafTask(id=i, base_path=self.base_path, scicd_local=self.scicd_local)
+            for i in range(2)
+        ]
+
+    @property
+    def path(self):
+        return "root"
+
+    def output(self):
+        return luigi.LocalTarget(str(self.output_path / "done.txt"))
+
+    def run(self):
+        with self.output().open("w") as f:
+            f.write("done")
+
+
+def test_luigi_lifecycle_and_events(mocker, tmp_path):
+    """
+    Verifies that the full Luigi execution lifecycle correctly triggers SciCD events.
+    """
+    mocker.patch("scicd.config.load_config", return_value={})
+    import scicd.config
+
+    scicd.config.reset_config()
+    # Mock workspace and git
+    mock_task_config = mocker.MagicMock()
+    mock_task_config.remote.root = str(tmp_path)
+    mock_task_config.remote.pull_inputs = True
+    mock_task_config.remote.push_outputs = True
+    mocker.patch("scicd.task.get_task_config", return_value=mock_task_config)
+    mocker.patch("scicd.task.get_git_commit", return_value="abc1234")
+
+    # Mock remote actions
+    mock_pull = mocker.patch("scicd.remote.pull")
+    mock_push = mocker.patch("scicd.remote.push")
+
+    # Create the external inputs so tasks can run
+    (tmp_path / "external_0.txt").write_text("input0")
+    (tmp_path / "external_1.txt").write_text("input1")
+
+    # Run the root task
+    task = RootTask(base_path=str(tmp_path))
+    success = luigi.build([task], local_scheduler=True, workers=1)
+    assert success
+
+    assert mock_pull.call_count == 3
+    assert mock_push.call_count == 3
+    assert (tmp_path / "root" / "done.txt").exists()
+    assert (tmp_path / "root" / ".luigi_fingerprints" / "done.txt.fingerprint").exists()
+
+
+def test_local_opts_disable_remote(mocker, tmp_path):
+    """
+    Ensures that overriding scicd_local disables network calls.
+    """
+    import scicd.config
+
+    scicd.config.reset_config()
+    mock_task_config = mocker.MagicMock()
+    mock_task_config.remote.root = str(tmp_path)
+    mock_task_config.remote.pull_inputs = True
+    mock_task_config.remote.push_outputs = True
+    mocker.patch("scicd.task.get_task_config", return_value=mock_task_config)
+    mocker.patch("scicd.task.get_git_commit", return_value="abc1234")
+
+    mock_pull = mocker.patch("scicd.remote.pull")
+    mock_push = mocker.patch("scicd.remote.push")
+
+    (tmp_path / "external_0.txt").write_text("input0")
+    (tmp_path / "external_1.txt").write_text("input1")
+
+    # Pass scicd_local=True directly to the task
+    task = RootTask(base_path=str(tmp_path), scicd_local=True)
+
+    success = luigi.build([task], local_scheduler=True, workers=1)
+    assert success
+    assert mock_pull.call_count == 0
+    assert mock_push.call_count == 0

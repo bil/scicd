@@ -58,8 +58,7 @@ Add the following to your `user` section:
 ```yaml
 # scicd.yaml
 user:
-  path_cascade: "params.yml.j2" # Central file for all task parameters
-  cascade_root: ["pipelines", "v1"] # Optional: Drill into nested keys
+  cascade_path: "config/params.yml.j2" # Central file for all task parameters
 ```
 
 ### Centralized File Structure
@@ -82,7 +81,7 @@ pipelines:
         window: 10
 ```
 
-When `path_cascade` is defined, `HashTask` will automatically look for its configuration within that file, namespaced by its class name (and optionally prefixed by `cascade_root`).
+When `cascade_path` is defined, `HashTask` will automatically look for its configuration within that file, namespaced by its class name (and optionally prefixed by `cascade_root`).
 
 ## Summary: Standard vs. HashTask
 

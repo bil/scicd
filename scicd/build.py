@@ -152,9 +152,9 @@ def export_gitlab(dag: DAG, filepath: str = ".gitlab-ci.yml"):
 
     # Extract workspace boilerplate (default/workflow blocks from scicd.yaml)
     boilerplate = {}
-    if hasattr(wspace, "repository") and hasattr(wspace.repository, "cicd"):
-        if isinstance(wspace.repository.cicd, dict):
-            boilerplate.update(wspace.repository.cicd)
+    if wspace.cicd:
+        if wspace.cicd:
+            boilerplate.update(wspace.cicd)
 
     dag.write_gitlab_yaml(filepath=filepath, **boilerplate)
 
@@ -184,33 +184,46 @@ def build(
 
     CLI Argument Namespacing:
     --------------------------
-    - task_<field>: Overrides fields in TaskConfig (e.g., cpu, memory, tags, image).
-                    These apply globally to every task in the DAG.
+    - TaskConfig fields (cpu, memory, image): Override task defaults directly (e.g., --cpu 8).
     - workspace_<key>: Blocked. Workspace settings must be set in config files.
     - <other>:      Passed directly to the frontend (e.g., Luigi task params).
                     For Luigi, use --TaskName-param val for task-specific params.
     """
+    import dataclasses
+    import scicd.config
     task_overrides = {}
     frontend_params = {}
 
     # Valid keys for TaskConfig
-    valid_task_keys = {f.name for f in dataclasses.fields(TaskConfig)}
-    # Keys that belong to WorkspaceConfig (we want to block these)
-    workspace_keys = {f.name for f in dataclasses.fields(WorkspaceConfig)}
+    valid_task_keys = {f.name for f in dataclasses.fields(scicd.config.TaskConfig)}
+    # Keys that belong to WorkspaceConfig (we want to block these from direct CLI overrides)
+    protected_keys = {f.name for f in dataclasses.fields(scicd.config.WorkspaceConfig)}
 
     for k, v in kwargs.items():
         # Normalize key to use underscores for comparison (Cyclopts provides dashes)
         norm_k = k.replace("-", "_")
+        root_key = norm_k.split(".")[0]
 
-        if norm_k.startswith("task_"):
-            key = norm_k[5:]
-            if key in valid_task_keys:
-                task_overrides[key] = v
-            else:
-                rich.print(
-                    f"[yellow]Warning:[/yellow] '{key}' is not a valid TaskConfig field. Ignoring."
-                )
-        elif norm_k.startswith("workspace_") or norm_k in workspace_keys:
+        if root_key in valid_task_keys:
+            parts = norm_k.split(".")
+            current = task_overrides
+            for part in parts[:-1]:
+                if part not in current:
+                    current[part] = {}
+                current = current[part]
+            
+            # Simple type casting for CLI values
+            if isinstance(v, str):
+                vl = v.lower()
+                if vl in ("true", "yes", "1"):
+                    v = True
+                elif vl in ("false", "no", "0"):
+                    v = False
+                elif vl.isdigit():
+                    v = int(v)
+
+            current[parts[-1]] = v
+        elif root_key in protected_keys or root_key.startswith("workspace_"):
             rich.print(
                 f"[bold red]Security Warning:[/bold red] Workspace override '{norm_k}' is not permitted via CLI. Ignoring."
             )
@@ -222,7 +235,10 @@ def build(
         rich.print(
             f"[bold blue]SciCD:[/bold blue] Applying global TaskConfig overrides: {task_overrides}"
         )
-        _ConfigManager.set_runtime_defaults(task_overrides)
+        base_task = scicd.config.get_base_task()
+        merged_task = base_task.merge(task_overrides)
+        # Update the base task singleton
+        scicd.config._ConfigManager._base_task = merged_task
 
     # 2. FRONTEND
     if frontend == "luigi":

@@ -124,7 +124,14 @@ class SliceNode(BaseNode):
 
         # Use the configuration from the first work unit as the basis
         cfg = self.work[0].cfg
-        cfg_json = json.dumps(asdict(cfg))
+        
+        def _json_default(o):
+            from types import SimpleNamespace
+            if isinstance(o, SimpleNamespace):
+                return vars(o)
+            return str(o)
+            
+        cfg_json = json.dumps(asdict(cfg), default=_json_default)
 
         # Serialize platform-specific boilerplate
         gitlab_info = scicd.gitlab.gitlab_info(cfg)

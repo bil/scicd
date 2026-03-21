@@ -1,8 +1,9 @@
 import luigi
 from pathlib import Path
-from scicd.task import HashTask
+from scicd.task import SciTask
 from scicd.build import luigi2dag
 from scicd.dag import BijectNode
+import scicd.config
 
 
 class ExternalInput(luigi.ExternalTask):
@@ -13,7 +14,7 @@ class ExternalInput(luigi.ExternalTask):
         return luigi.LocalTarget(str(Path(self.base_path) / f"external_{self.id}.txt"))
 
 
-class LeafTask(HashTask):
+class LeafTask(SciTask):
     id = luigi.IntParameter()
     base_path = luigi.Parameter(default=".")
 
@@ -32,7 +33,7 @@ class LeafTask(HashTask):
             f.write("done")
 
 
-class RootTask(HashTask):
+class RootTask(SciTask):
     base_path = luigi.Parameter(default=".")
 
     def requires(self):
@@ -50,51 +51,6 @@ class RootTask(HashTask):
             f.write("done")
 
 
-def test_luigi_lifecycle_and_events(mocker, tmp_path):
-    """
-    Verifies that the full Luigi execution lifecycle correctly triggers SciCD events.
-
-    This test runs a real Luigi task tree and asserts that:
-    1. _pull_inputs_on_start is triggered (mock_pull).
-    2. _push_outputs_on_success is triggered (mock_push).
-    3. Output files and their corresponding fingerprints are created in the workspace.
-    """
-    mocker.patch("scicd.config.load_config", return_value={})
-    import scicd.config
-
-    scicd.config.reset_config()
-    # Mock workspace and git
-    mock_ws = mocker.MagicMock()
-    mock_ws.remote.root = str(tmp_path)
-    mock_ws.remote.pull_inputs = True
-    mock_ws.remote.push_outputs = True
-    mocker.patch("scicd.task.get_workspace", return_value=mock_ws)
-    mocker.patch("scicd.task.get_git_commit", return_value="abc1234")
-
-    # Mock remote actions
-    mock_pull = mocker.patch("scicd.remote.pull")
-    mock_push = mocker.patch("scicd.remote.push")
-
-    # Create the external inputs so tasks can run
-    (tmp_path / "external_0.txt").write_text("input0")
-    (tmp_path / "external_1.txt").write_text("input1")
-
-    # Run the root task
-    task = RootTask(base_path=str(tmp_path))
-    success = luigi.build([task], local_scheduler=True, workers=1)
-    assert success
-
-    # Verify events:
-    # Root + 2 Leaves = 3 tasks.
-    # Each Leaf pulls its ExternalInput.
-    # Root pulls the 2 Leaf outputs.
-    assert mock_pull.call_count == 3
-    assert mock_push.call_count == 3
-    # Verify outputs and fingerprints
-    assert (tmp_path / "root" / "done.txt").exists()
-    assert (tmp_path / "root" / ".luigi_fingerprints" / "done.txt.fingerprint").exists()
-
-
 def test_luigi_dag_resolution(mocker):
     """
     Verifies that a Luigi task tree is correctly converted into an abstract SciCD DAG.
@@ -104,7 +60,6 @@ def test_luigi_dag_resolution(mocker):
     number of nodes, topological ranks, and parent-child dependencies.
     """
     mocker.patch("scicd.config.load_config", return_value={})
-    import scicd.config
 
     scicd.config.reset_config()
     # Mock importlib.import_module

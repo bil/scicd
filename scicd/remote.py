@@ -39,17 +39,20 @@ def push(
     Example:
         python3 -m scicd.remote push results/plot.png results/data.csv
     """
+    task_config = scicd.config.get_task_config()
     wspace = scicd.config.get_workspace()
+    # Ensure absolute!
+    files = [file.resolve() for file in files]
 
-    if not wspace.remote:
+    if not task_config.remote:
         return True
 
-    protocol = wspace.remote.protocol
+    protocol = task_config.remote.protocol
 
     if protocol == "rclone":
-        return _rclone_batch(wspace, list(files), "push")
+        return _rclone_batch(task_config, list(files), "push")
     if protocol == "https":
-        return _https_batch(wspace, list(files), "push")
+        return _https_batch(task_config, wspace, list(files), "push")
 
     raise ValueError(f"Unsupported protocol for push: {protocol}")
 
@@ -72,17 +75,18 @@ def pull(
     Example:
         python3 -m scicd.remote pull results/raw_data.fits
     """
+    task_config = scicd.config.get_task_config()
     wspace = scicd.config.get_workspace()
 
-    if not wspace.remote:
+    if not task_config.remote:
         return True
 
-    protocol = wspace.remote.protocol
+    protocol = task_config.remote.protocol
 
     if protocol == "rclone":
-        return _rclone_batch(wspace, list(files), "pull")
+        return _rclone_batch(task_config, list(files), "pull")
     if protocol == "https":
-        return _https_batch(wspace, list(files), "pull")
+        return _https_batch(task_config, wspace, list(files), "pull")
 
     raise ValueError(f"Unsupported protocol for pull: {protocol}")
 
@@ -96,17 +100,17 @@ def pull_full() -> bool:
     It is intended for stage_00 of GitLab pipelines to populate the
     persistent storage with existing baseline data.
     """
-    wspace = scicd.config.get_workspace()
+    task_config = scicd.config.get_task_config()
 
-    if not wspace.remote or not wspace.remote.url or not wspace.remote.root:
+    if not task_config.remote or not task_config.remote.url or not task_config.remote.root:
         print("No remote path configured. Skipping pull-full.")
         return True
 
-    protocol = wspace.remote.protocol
+    protocol = task_config.remote.protocol
 
     if protocol == "rclone":
-        flags = " ".join(wspace.remote.flags)
-        cmd = f"rclone copy {wspace.remote.url} {wspace.remote.root} {flags}"
+        flags = " ".join(task_config.remote.flags)
+        cmd = f"rclone copy {task_config.remote.url} {task_config.remote.root} {flags}"
         subprocess.check_call(cmd, shell=True)
         return True
 
@@ -117,19 +121,19 @@ def pull_full() -> bool:
 
 
 def _https_batch(
-    wspace: scicd.config.WorkspaceConfig, files: List[Path], direction="push"
+    task_config: scicd.config.TaskConfig, wspace: scicd.config.WorkspaceConfig, files: List[Path], direction="push"
 ) -> bool:
     """HTTPS implementation using requests Session for connection pooling."""
     if (
-        not wspace.remote
+        not task_config.remote
         or not files
-        or not wspace.remote.url
-        or not wspace.remote.root
+        or not task_config.remote.url
+        or not task_config.remote.root
     ):
         return True
 
-    local_root = Path(wspace.remote.root)
-    base_url = wspace.remote.url.rstrip("/")
+    local_root = Path(task_config.remote.root)
+    base_url = task_config.remote.url.rstrip("/")
 
     # Use a session to reuse the TCP connection for multiple files
     with requests.Session() as session:
@@ -139,6 +143,7 @@ def _https_batch(
 
         for local_p in files:
             try:
+                print(local_p, base_url, local_root)
                 rel_path = local_p.relative_to(local_root)
                 url = f"{base_url}/{rel_path}"
 
@@ -169,19 +174,19 @@ def _https_batch(
 
 
 def _rclone_batch(
-    wspace: scicd.config.WorkspaceConfig, files: List[Path], direction="push"
+    task_config: scicd.config.TaskConfig, files: List[Path], direction="push"
 ) -> bool:
     if (
-        not wspace.remote
+        not task_config.remote
         or not files
-        or not wspace.remote.url
-        or not wspace.remote.root
+        or not task_config.remote.url
+        or not task_config.remote.root
     ):
         return True
 
-    flags = " ".join(wspace.remote.flags)
-    local_root = Path(wspace.remote.root)
-    remote_root = wspace.remote.url
+    flags = " ".join(task_config.remote.flags)
+    local_root = Path(task_config.remote.root)
+    remote_root = task_config.remote.url
 
     rel_paths = []
     for f in files:
