@@ -137,10 +137,14 @@ def load_yaml(path: str, **kwargs: Any) -> Dict[str, Any]:
         raise FileNotFoundError(f"YAML file not found: {path}")
 
     context = extract_context(path, **kwargs)
+    # Inject environment variables for build-time interpolation
+    if "env" not in context:
+        context["env"] = os.environ
+
     post = frontmatter.load(path)
 
-    env = Environment()
-    rendered = env.from_string(post.content).render(context)
+    jinja_env = Environment()
+    rendered = jinja_env.from_string(post.content).render(context)
     data: Dict[str, Any] = yaml.safe_load(rendered) or {}
 
     return data

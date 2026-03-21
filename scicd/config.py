@@ -150,7 +150,12 @@ class RemoteConfig:
 
     def __post_init__(self):
         if self.root:
+            self.root = os.path.expandvars(self.root)
             self.root = str(Path(self.root).resolve())
+
+        if self.url:
+            self.url = os.path.expandvars(self.url)
+
         valid_protocols = ["rclone", "https"]
         if self.protocol not in valid_protocols:
             raise ValueError(
@@ -294,6 +299,9 @@ class TaskConfig:
         """
         Validate resource constraints and auto-convert nested dictionaries.
         """
+        if self.image:
+            self.image = os.path.expandvars(self.image)
+
         if self.cpu <= 0:
             raise ValueError(f"cpu must be positive, got {self.cpu}")
 
@@ -585,6 +593,8 @@ class WorkspaceConfig:
             raise ValueError(
                 f"platform must be one of {valid_platforms}, got '{self.platform}'"
             )
+        self.url = os.path.expandvars(self.url)
+        self.project = os.path.expandvars(self.project)
 
 
 # ================================== HELPERS =================================
