@@ -50,6 +50,7 @@ class BaseNode(ABC):
         all_ids = [node.identifier for node in self.node_deps]
         return sorted(list(set(all_ids)))
 
+
 @dataclass
 class BijectNode(BaseNode):
     """

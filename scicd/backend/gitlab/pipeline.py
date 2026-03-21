@@ -6,12 +6,16 @@ from scicd.config import get_workspace
 from scicd.git import get_branch
 
 
-def lint_pipeline(yml_filepath: str = ".gitlab-ci.yml") -> bool:
+def lint_pipeline(
+    yml_filepath: str = ".gitlab-ci.yml", url: str = None, project: str = None
+) -> bool:
     """
     Validates the generated GitLab CI/CD YAML file using the GitLab API.
 
     Args:
         yml_filepath (str): Path to the YAML file to lint. Defaults to ".gitlab-ci.yml".
+        url (str, optional): GitLab instance URL.
+        project (str, optional): GitLab project path (e.g. org/repo).
 
     Returns:
         bool: True if valid, False if invalid.
@@ -40,32 +44,30 @@ def lint_pipeline(yml_filepath: str = ".gitlab-ci.yml") -> bool:
     # Grab the global workspace config
     workspace = get_workspace()
 
-    if workspace.platform != "gitlab":
+    url = url or workspace.url
+    project = project or workspace.project
+
+    if not url or not project:
         raise RuntimeError(
-            "Workspace is not configured for GitLab",
-            f"(workspace.platform = {workspace.platform})",
+            "Missing 'url' or 'project' for GitLab API.\n"
+            "Please provide them as CLI arguments (--url, --project) "
+            "or define them in your workspace configuration."
         )
-
-    url = workspace.url
-    project_path = workspace.project
-
-    if not project_path or not url:
-        raise RuntimeError("Missing 'url' or 'project' in workspace configuration")
 
     # Connect to GitLab and get the project context
     client = gitlab.Gitlab(url, private_token=pat)
     try:
-        project = client.projects.get(project_path)
+        gl_project = client.projects.get(project)
     except gitlab.exceptions.GitlabGetError as e:
         raise RuntimeError(
-            f"Could not find GitLab project: '{project_path}' at {url}.\n"
-            f"Check workspace configuration!"
+            f"Could not find GitLab project: '{project}' at {url}.\n"
+            f"Check workspace configuration or provided arguments!"
         ) from e
 
     # Send the content to the project-level CI Linter
-    print(f"Linting '{yml_filepath}' against {url}/{project_path}...")
+    print(f"Linting '{yml_filepath}' against {url}/{project}...")
     try:
-        lint_result = project.ci_lint.create({"content": yaml_content})
+        lint_result = gl_project.ci_lint.create({"content": yaml_content})
     except gitlab.exceptions.GitlabCreateError as e:
         raise RuntimeError(f"GitLab API Error during linting: {e}") from e
 
@@ -88,12 +90,16 @@ def lint_pipeline(yml_filepath: str = ".gitlab-ci.yml") -> bool:
     return lint_result.valid
 
 
-def run_pipeline(branch: str = None, **pipeline_vars):
+def run_pipeline(
+    branch: str = None, url: str = None, project: str = None, **pipeline_vars
+):
     """
     Triggers a GitLab pipeline for the project defined in config.yaml.
 
     Args:
         branch (str, optional): Target git branch. Defaults to current active branch.
+        url (str, optional): GitLab instance URL.
+        project (str, optional): GitLab project path.
         **pipeline_vars: Arbitrary key-value pairs to pass as GitLab CI/CD variables.
     """
     # Load environment and check for PAT
@@ -110,26 +116,24 @@ def run_pipeline(branch: str = None, **pipeline_vars):
     # Grab the global config
     workspace = get_workspace()
 
-    if workspace.platform != "gitlab":
+    url = url or workspace.url
+    project = project or workspace.project
+
+    if not url or not project:
         raise RuntimeError(
-            "Workspace is not configured for GitLab",
-            f"(workspace.platform = {workspace.platform})",
+            "Missing 'url' or 'project' for GitLab API.\n"
+            "Please provide them as CLI arguments (--url, --project) "
+            "or define them in your workspace configuration."
         )
-
-    url = workspace.url
-    project_path = workspace.project
-
-    if not project_path or not url:
-        raise RuntimeError("Missing 'url' or 'project' in workspace configuration")
 
     # Connect to GitLab
     client = gitlab.Gitlab(url, private_token=pat)
     try:
-        project = client.projects.get(project_path)
+        gl_project = client.projects.get(project)
     except gitlab.exceptions.GitlabGetError as e:
         raise RuntimeError(
-            f"Could not find GitLab project: '{project_path}' at {url}.\n"
-            f"Check workspace configuration."
+            f"Could not find GitLab project: '{project}' at {url}.\n"
+            f"Check workspace configuration or provided arguments."
         ) from e
 
     # Resolve branch
@@ -146,7 +150,7 @@ def run_pipeline(branch: str = None, **pipeline_vars):
         print(f"Injecting {formatted_vars} into pipeline")
 
     # Trigger the pipeline
-    p = project.pipelines.create({"ref": branch, "variables": formatted_vars})
+    p = gl_project.pipelines.create({"ref": branch, "variables": formatted_vars})
 
     print(f"Pipeline {p.id} triggered on branch '{branch}'")
     print(f"View here: {p.web_url}")

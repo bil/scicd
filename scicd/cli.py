@@ -12,8 +12,6 @@ import rich
 from cyclopts import App, Parameter
 
 import scicd.build
-import scicd.backend.gitlab.decode
-import scicd.backend.gitlab.pipeline
 import scicd.frontend.luigi.run
 import scicd.config
 
@@ -58,8 +56,8 @@ def build(
         str, Parameter(help="Frontend to parse the DAG (e.g. luigi)")
     ] = "luigi",
     backend: Annotated[
-        str, Parameter(help="Backend to render the DAG (e.g. gitlab, dot)")
-    ] = "gitlab",
+        Optional[str], Parameter(help="Backend to render the DAG (e.g. gitlab, dot)")
+    ] = None,
     filepath: Annotated[
         Optional[str], Parameter(help="Output path for the generated file.")
     ] = None,
@@ -79,22 +77,46 @@ def build(
 
 
 @app.command()
-def lint_gitlab(
+def lint_cicd(
     yml_filepath: Annotated[
         str, Parameter(help="Path to the YAML file to validate.")
     ] = ".gitlab-ci.yml",
+    backend: Annotated[
+        Optional[str], Parameter(help="Backend platform (e.g., gitlab).")
+    ] = None,
+    url: Annotated[
+        Optional[str], Parameter(help="Platform URL (e.g., https://gitlab.com).")
+    ] = None,
+    project: Annotated[
+        Optional[str], Parameter(help="Project path (e.g., org/repo).")
+    ] = None,
 ):
     """
-    Validates the generated YAML against the GitLab Lint API.
-    Requires valid CI_SERVER_URL and PRIVATE_TOKEN environment variables.
+    Validates the generated YAML against the specified CI/CD Lint API.
     """
-    if not scicd.backend.gitlab.pipeline.lint_pipeline(yml_filepath=yml_filepath):
+    if backend is None:
+        backend = scicd.config.get_workspace().platform
+
+    import scicd.backend.run
+
+    if not scicd.backend.run.lint_pipeline(
+        backend=backend, yml_filepath=yml_filepath, url=url, project=project
+    ):
         sys.exit(1)
 
 
 @app.command()
-def run_gitlab_pipeline(
+def run_pipeline(
     branch: Annotated[str, Parameter(help="The branch to trigger on.")] = "main",
+    backend: Annotated[
+        Optional[str], Parameter(help="Backend platform (e.g., gitlab).")
+    ] = None,
+    url: Annotated[
+        Optional[str], Parameter(help="Platform URL (e.g., https://gitlab.com).")
+    ] = None,
+    project: Annotated[
+        Optional[str], Parameter(help="Project path (e.g., org/repo).")
+    ] = None,
     **variables: Annotated[
         str,
         Parameter(
@@ -103,10 +125,16 @@ def run_gitlab_pipeline(
     ],
 ):
     """
-    Triggers a remote GitLab pipeline execution.
-    Usage: scicd run-gitlab-pipeline --branch develop --RUNNER internal --DEBUG true
+    Triggers a remote CI/CD pipeline execution.
     """
-    scicd.backend.gitlab.pipeline.run_pipeline(branch=branch, **variables)
+    if backend is None:
+        backend = scicd.config.get_workspace().platform
+
+    import scicd.backend.run
+
+    scicd.backend.run.run_pipeline(
+        backend=backend, branch=branch, url=url, project=project, **variables
+    )
 
 
 @app.command()

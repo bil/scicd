@@ -1,5 +1,6 @@
 from scicd.backend.gitlab.decode import write_gitlab_yaml
 
+
 def export_dag(dag, filepath=None, backend="gitlab", **boilerplate):
     """Functional dispatch to export a DAG using various backends."""
     if backend == "gitlab":

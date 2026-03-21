@@ -21,7 +21,7 @@ def build(
     module: str,
     target: str,
     frontend: str = "luigi",
-    backend: str = "gitlab",
+    backend: str = None,
     filepath: str = None,
     **kwargs,
 ):
@@ -37,6 +37,9 @@ def build(
     - <other>:      Passed directly to the frontend (e.g., Luigi task params).
                     For Luigi, use --TaskName-param val for task-specific params.
     """
+
+    if backend is None:
+        backend = scicd.config.get_workspace().platform
 
     task_overrides = {}
     frontend_params = {}
@@ -100,5 +103,6 @@ def build(
 
     # BACKEND
     from scicd.backend.export import export_dag
+
     export_dag(dag, filepath=filepath, backend=backend)
     rich.print(f"[bold green]SciCD:[/bold green] Generated {backend} output")
