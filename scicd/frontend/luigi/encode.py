@@ -29,11 +29,14 @@ class LuigiAdapter(BaseAdapter):
 
     @property
     def params(self) -> DynamicModel:
-        """Return significant task parameters as a DynamicModel."""
-        params = self.work.to_str_params()
-        insignificant = set(params.keys()) - set(self.work.get_param_names())
-        for key in insignificant:
-            params.pop(key)
+        """Return raw task parameters as a serializable Pydantic model."""
+        # param_kwargs contains the actual Python types (int, bool, etc.)
+        # whereas to_str_params() forces everything to a string.
+        all_params = self.work.param_kwargs
+        
+        # Filter for only significant parameters
+        sig_names = set(self.work.get_param_names())
+        params = {k: v for k, v in all_params.items() if k in sig_names}
 
         return DynamicModel.model_validate(params)
 
