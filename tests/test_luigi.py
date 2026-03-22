@@ -79,17 +79,17 @@ def test_luigi_dag_resolution(mocker, tmp_path):
     scicd.config.reset_config()
     # Mock importlib.import_module
     mocker.patch("importlib.import_module")
-    # This stops Luigi from trying to call __import__("dummy")
-    mocker.patch("luigi.cmdline_parser.CmdlineParser._attempt_load_module")
+    # Patch the CmdlineParser in the scicd.frontend.luigi.encode namespace
+    mocker.patch("scicd.frontend.luigi.encode.CmdlineParser._attempt_load_module")
 
     # Mock the CmdlineParser context manager and its return value
     mock_cp = mocker.MagicMock()
     # Provide a real base_path to avoid MagicMock in file paths
     mock_cp.get_task_obj.return_value = RootTask(base_path=str(tmp_path))
 
-    # Patch the global_instance context manager
+    # Patch the global_instance context manager in the encode namespace
     mocker.patch(
-        "luigi.cmdline_parser.CmdlineParser.global_instance",
+        "scicd.frontend.luigi.encode.CmdlineParser.global_instance",
         return_value=mocker.MagicMock(__enter__=lambda s: mock_cp),
     )
 
