@@ -1,9 +1,11 @@
 """
-Module docstring.
+Directed Acyclic Graph (DAG) abstractions for SciCD.
+
+This module defines the internal representation of a pipeline as a graph of nodes,
+where each node encapsulates one or more units of work (adapters).
 """
 
-from __future__ import annotations  # Put this at the very top of your file
-from typing import List
+from __future__ import annotations
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 
@@ -13,13 +15,18 @@ import scicd.adapter
 
 @dataclass
 class BaseNode(ABC):
-    work: List[scicd.adapter.BaseAdapter]
+    """
+    Abstract base class for a node in the SciCD DAG.
+    
+    A node represents a logical step in the pipeline. It contains a list of
+    adapters (the work to be done) and a set of dependency nodes.
+    """
+    work: list[scicd.adapter.BaseAdapter]
     rank: int
     node_deps: list[BaseNode]
 
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__
-        # Just show the IDs of dependencies to avoid infinite recursion
         dep_ids = [d.identifier for d in self.node_deps]
         return (
             f"<{cls_name} id='{self.identifier}' "
@@ -29,6 +36,7 @@ class BaseNode(ABC):
 
     @property
     def identifier(self) -> str:
+        """A unique, deterministic string identifying this node."""
         return self.work[0].identifier if self.work else "unknown"
 
     @property
@@ -42,11 +50,8 @@ class BaseNode(ABC):
         """Return the Graphviz label string for the node."""
 
     @property
-    def needs(self) -> List[str]:
-        """
-        Flattened list of all identifier dependencies.
-        """
-        # We take all values from the node_deps dict and flatten them
+    def needs(self) -> list[str]:
+        """Flattened list of unique identifier dependencies."""
         all_ids = [node.identifier for node in self.node_deps]
         return sorted(list(set(all_ids)))
 
@@ -54,17 +59,17 @@ class BaseNode(ABC):
 @dataclass
 class BijectNode(BaseNode):
     """
-    A 1:1 mapping from a unit of work to a CI/CD job
+    A 1:1 mapping from a unit of work to a single CI/CD job.
     """
 
     def __post_init__(self):
         if not self.work or len(self.work) != 1:
-            raise ValueError(f"BijectNode expecs 1 unit of work, received: {self.work}")
+            raise ValueError(f"BijectNode expects exactly 1 unit of work, received: {len(self.work)}")
 
     @property
     def dot_label(self) -> str:
-        # Biject: Family (param1=val1, param2=val2)
-        params = self.work[0].params
+        """Generate a label showing the task name and its parameters."""
+        params = self.work[0].params.model_dump()
         param_str = ", ".join([f"{k}={v}" for k, v in params.items()])
 
         if param_str:
@@ -76,32 +81,38 @@ class BijectNode(BaseNode):
 class SliceNode(BaseNode):
     """
     Groups multiple units of work to be executed in a dynamic child pipeline.
+    Used for scattering tasks across parallel workers.
     """
 
     @property
     def identifier(self) -> str:
+        """Identifier for the trigger job that launches the child pipeline."""
         return f"{self.name}_rank{self.rank}_slice"
 
     @property
     def dot_label(self) -> str:
-        # Slice: Family
-        # [param1=val1]
-        # [param2=val2]
+        """Generate a stacked label showing all tasks grouped in this slice."""
         label_lines = [self.name]
         for adapter in self.work:
-            params = adapter.params
+            params = adapter.params.model_dump()
             param_str = ", ".join([f"{k}={v}" for k, v in params.items()])
             label_lines.append(f"[{param_str}]" if param_str else "[]")
         return "\\n".join(label_lines)
 
 
 class DAG:
+    """
+    The complete pipeline representation.
+    Provides methods for topological sorting and visualization.
+    """
 
-    def __init__(self, nodes: List[BaseNode]):
+    def __init__(self, nodes: list[BaseNode]):
         self.nodes = nodes
 
     def export_dot(self, filepath: str):
-        """Generate .dot file of DAG"""
+        """
+        Export the DAG to Graphviz DOT format for visualization.
+        """
         dot_lines = [
             "digraph G {",
             "    rankdir=LR;",
@@ -110,12 +121,8 @@ class DAG:
             "",
         ]
 
-        # Use a deterministic sort to ensure node_0 is always the same node across runs
-        # We sort by the dot label string to ensure stable ordering in Git
+        # Use a deterministic sort to ensure stable output
         sorted_nodes = sorted(self.nodes, key=lambda x: x.dot_label)
-
-        # Use the Python object's memory ID for the dictionary ONLY during this
-        # specific loop to map objects to stable strings like "node_0"
         node_to_id = {id(node): f"node_{i}" for i, node in enumerate(sorted_nodes)}
 
         ranks = {}
@@ -123,9 +130,7 @@ class DAG:
             ranks.setdefault(node.rank, []).append(node)
 
         for _, nodes in sorted(ranks.items()):
-            # Sort within rank for deterministic {rank=same} blocks
             current_rank_nodes = sorted(nodes, key=lambda x: x.dot_label)
-
             identifiers = " ".join(
                 [f'"{node_to_id[id(n)]}"' for n in current_rank_nodes]
             )
@@ -133,17 +138,12 @@ class DAG:
 
             for node in current_rank_nodes:
                 color = "lightblue" if isinstance(node, SliceNode) else "lightgrey"
-
-                # Clean up the label to prevent DOT syntax errors
                 label = node.dot_label.replace('"', '\\"')
-
-                # Use the stable node_i name
                 stable_id = node_to_id[id(node)]
                 dot_lines.append(
                     f'    "{stable_id}" [label="{label}", fillcolor={color}, style=filled];'
                 )
 
-        # Edges using stable IDs
         for node in self.nodes:
             child_id = node_to_id[id(node)]
             for parent in node.node_deps:

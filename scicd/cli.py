@@ -1,5 +1,8 @@
 """
 CLI interface for scicd using Cyclopts.
+
+This module defines all user-facing commands for building pipelines, running tasks 
+locally, and inspecting configuration state.
 """
 
 import os
@@ -32,15 +35,19 @@ def run(
         str, Parameter(help="The Python module containing the Task class.")
     ],
     target: Annotated[str, Parameter(help="The task class name (target).")],
-    params: Annotated[str, Parameter(help="JSON string of task parameters.")],
     frontend: Annotated[str, Parameter(help="Frontend framework to use.")] = "luigi",
 ):
     """
     Worker entrypoint to execute a single task.
     Used by CI jobs to run the actual work unit.
+    Reads parameters from the SCICD_PARAMS environment variable.
     """
     if frontend != "luigi":
         raise ValueError(f"Unsupported frontend: {frontend}")
+
+    params = os.environ.get("SCICD_PARAMS")
+    if not params:
+        raise ValueError("Missing required environment variable: SCICD_PARAMS")
 
     scicd.frontend.luigi.run.run_task(module, target, params)
 
@@ -57,7 +64,10 @@ def local(
     ] = "luigi",
     **kwargs: Annotated[str, Parameter(help="Dynamic overrides", group="Overrides")],
 ):
-    """Run a task locally for development."""
+    """
+    Run a task locally for development.
+    Uses the local framework scheduler and intercepts TaskConfig overrides.
+    """
     frontend_params = scicd.config.intercept_cli_overrides(kwargs)
 
     if frontend == "luigi":
@@ -89,6 +99,7 @@ def build(
 ):
     """
     Compiles a target into a CI/CD pipeline or visualization.
+    Generates platform-specific configuration (like .gitlab-ci.yml).
     """
     scicd.build.build(
         module=module,
@@ -117,6 +128,7 @@ def lint_cicd(
 ):
     """
     Validates the generated YAML against the specified CI/CD Lint API.
+    Ensures the pipeline is syntactically correct for the target platform.
     """
     if backend is None:
         backend = scicd.config.get_workspace().platform
@@ -148,6 +160,7 @@ def run_pipeline(
 ):
     """
     Triggers a remote CI/CD pipeline execution.
+    Sends an API request to the platform to start a new pipeline run.
     """
     if backend is None:
         backend = scicd.config.get_workspace().platform
@@ -166,7 +179,7 @@ def config(
 ):
     """
     Inspects the global and task-level configuration.
-    Prints the loaded config state.
+    Prints the loaded config state including all applied overrides.
     """
     scicd.config.intercept_cli_overrides(overrides)
 
@@ -195,8 +208,7 @@ def config_val(
     ],
 ):
     """
-    Extracts a specific value from the configuration using a key path.
-    Useful for shell scripts and CI/CD variables.
+    Extracts a specific value from the configuration using a dot-notated key path.
     """
     scicd.config.intercept_cli_overrides(overrides)
 
@@ -205,14 +217,6 @@ def config_val(
 
     # Create a unified dictionary for querying (flat structure matching scicd.yaml)
     data = {"workspace": workspace_dict, **task_dict}
-
-    # Intercept specific computed pseudo-keys
-    if key == "remote.get_root":
-        print(scicd.config.get_task_config().remote.get_root())
-        return
-    if key == "remote.get_url":
-        print(scicd.config.get_task_config().remote.get_url())
-        return
 
     # Traverse the dictionary using the dot-separated key
     try:
@@ -242,7 +246,7 @@ def config_task(
     ],
 ):
     """
-    Inspects the resolved task configuration.
+    Inspects the fully resolved task configuration.
     """
     scicd.config.intercept_cli_overrides(overrides)
     result = scicd.config.get_task_config()

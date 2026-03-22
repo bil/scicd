@@ -1,8 +1,9 @@
+"""GitLab CI/CD YAML decoding and generation."""
+
 import json
 import shlex
 from copy import deepcopy
-from typing import Any, Dict, List
-from types import SimpleNamespace
+from typing import Any
 
 import yaml
 
@@ -13,27 +14,21 @@ from scicd.dag import DAG, BaseNode, BijectNode, SliceNode
 
 
 def gitlab_info(cfg: TaskConfig) -> dict:
-    """
-    Load generic gitlab job keys.
-    """
+    """Resolve generic GitLab job configuration from TaskConfig."""
     info = {}
 
     if cfg.image:
         info["image"] = str(cfg.image)
 
-    # Resolve variables from standard config and custom executors
     variables = dict(cfg.variables) if cfg.variables else {}
 
-    # Custom Executors
     if cfg.tags:
         try:
             executor = get_executor(cfg.tags)
-            # Call the executor function to get additional environment variables
             executor_vars = executor.func(cfg)
             if executor_vars:
                 variables.update(executor_vars)
         except ValueError:
-            # No matching executor found, which is fine (standard tags)
             pass
 
     if cfg.executor_config:
@@ -48,25 +43,26 @@ def gitlab_info(cfg: TaskConfig) -> dict:
     if cfg.retry > 0:
         info["retry"] = int(cfg.retry)
 
-    # Timeouts in gitlab
     if cfg.timeout:
         info["timeout"] = str(cfg.timeout)
 
-    # Any direct CI/CD passthrough config (interruptible, resource_group, etc)
     if cfg.cicd:
         info = scicd.yamler.deep_update(info, dict(cfg.cicd))
 
     return info
 
 
-def render_node_gitlab(node: BaseNode) -> List[Dict[str, Any]]:
-    """
-    Render a single DAG node into Gitlab CI/CD jobs.
-    """
+def render_node_gitlab(node: BaseNode) -> list[dict[str, Any]]:
+    """Convert a DAG node into one or more GitLab job definitions."""
     if isinstance(node, BijectNode):
-        job = gitlab_info(node.work[0].cfg)
+        adapter = node.work[0]
+        job = gitlab_info(adapter.cfg)
         job["stage"] = f"stage_{node.rank}"
-        job["script"] = [shlex.join(node.work[0].command)]
+        job["script"] = [shlex.join(adapter.command)]
+
+        variables = job.get("variables", {})
+        variables["SCICD_PARAMS"] = adapter.params_json
+        job["variables"] = variables
 
         if node.needs:
             job["needs"] = node.needs
@@ -74,30 +70,27 @@ def render_node_gitlab(node: BaseNode) -> List[Dict[str, Any]]:
         return [{node.identifier: job}]
 
     elif isinstance(node, SliceNode):
-        # Extract commands from all work units
         all_commands = [adapter.command for adapter in node.work]
         commands_json = json.dumps(all_commands)
 
-        # Use the configuration from the first work unit as the basis
         cfg = node.work[0].cfg
+        cfg_json = cfg.model_dump_json(exclude_none=True)
 
-        def _json_default(o):
-
-            if isinstance(o, SimpleNamespace):
-                return vars(o)
-            return str(o)
-
-        cfg_json = json.dumps(cfg.model_dump(), default=_json_default)
-
-        # Serialize platform-specific boilerplate
         g_info = gitlab_info(cfg)
         gitlab_info_json = json.dumps(g_info)
 
         gen_id = f"{node.name}_rank{node.rank}_gen"
 
-        # Generator Job: Dynamically creates the child pipeline YAML
         gen_job = deepcopy(g_info)
         gen_job["stage"] = f"stage_{node.rank}"
+
+        gen_vars = gen_job.get("variables", {})
+        gen_vars.update({
+            "SCICD_COMMANDS_JSON": commands_json,
+            "SCICD_CFG_JSON": cfg_json,
+            "SCICD_GITLAB_INFO_JSON": gitlab_info_json,
+        })
+        gen_job["variables"] = gen_vars
 
         gen_command = [
             "python3",
@@ -106,12 +99,6 @@ def render_node_gitlab(node: BaseNode) -> List[Dict[str, Any]]:
             "generate",
             "--target",
             node.name,
-            "--commands-json",
-            commands_json,
-            "--cfg-json",
-            cfg_json,
-            "--gitlab-info-json",
-            gitlab_info_json,
             "--gen-id",
             gen_id,
         ]
@@ -122,7 +109,6 @@ def render_node_gitlab(node: BaseNode) -> List[Dict[str, Any]]:
         if node.needs:
             gen_job["needs"] = node.needs
 
-        # Trigger Job: Launches the child pipeline generated above
         trigger_job = {
             "stage": f"stage_{node.rank}",
             "variables": {"PARENT_PIPELINE_ID": "$CI_PIPELINE_ID"},
@@ -143,16 +129,14 @@ def render_node_gitlab(node: BaseNode) -> List[Dict[str, Any]]:
 
 
 def render_gitlab(dag: DAG, **boilerplate) -> dict:
-    """Generate .gitlab-ci.yml dict from DAG."""
+    """Generate full GitLab CI/CD pipeline dictionary from DAG."""
     pipeline = deepcopy(boilerplate)
     all_jobs = {}
 
-    # Actual work
     for node in dag.nodes:
         for job_dict in render_node_gitlab(node):
             all_jobs.update(job_dict)
 
-    # Identify functional stages
     unique_stages = sorted(
         {body["stage"] for body in all_jobs.values() if "stage" in body},
         key=lambda x: int(x.split("_")[1]) if "_" in x else 0,
@@ -164,7 +148,7 @@ def render_gitlab(dag: DAG, **boilerplate) -> dict:
 
 
 def write_gitlab_yaml(dag: DAG, filepath: str = ".gitlab-ci.yml", **boilerplate):
-    """Writes the rendered dict to a file."""
+    """Serialize rendered pipeline dictionary to YAML file."""
     with open(filepath, "w", encoding="utf-8") as f:
         yaml.dump(
             render_gitlab(dag, **boilerplate),
@@ -175,13 +159,11 @@ def write_gitlab_yaml(dag: DAG, filepath: str = ".gitlab-ci.yml", **boilerplate)
 
 
 def export_gitlab(dag: DAG, filepath: str = ".gitlab-ci.yml"):
-    """Renders the abstract DAG into a GitLab CI/CD pipeline."""
+    """Render abstract DAG into a GitLab CI/CD pipeline file."""
     wspace = get_workspace()
 
-    # Extract workspace boilerplate (default/workflow blocks from scicd.yaml)
     boilerplate = {}
     if wspace.cicd:
-        if wspace.cicd:
-            boilerplate.update(wspace.cicd)
+        boilerplate.update(wspace.cicd)
 
     write_gitlab_yaml(dag, filepath=filepath, **boilerplate)

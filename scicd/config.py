@@ -1,5 +1,9 @@
 """
-Module docstring.
+Configuration management system for SciCD.
+
+This module provides Pydantic-based configuration models for workspaces and tasks,
+along with singleton managers for global configuration state and CLI override 
+interception.
 """
 
 from __future__ import annotations
@@ -8,8 +12,9 @@ import os
 
 from pathlib import Path
 from typing import Optional, Any, Union, Literal, Tuple, ClassVar
-from types import SimpleNamespace
 
+
+import dataclasses
 import rich
 from pydantic import (
     BaseModel,
@@ -22,14 +27,27 @@ from pydantic import (
 
 from scicd.yamler import deep_update, load_yaml, nest_dict
 
-class UserConfig(BaseModel):
-    """Extensible user-defined configuration namespace."""
+
+class DynamicModel(BaseModel):
+    """
+    A Pydantic model that allows arbitrary extra fields.
+    """
 
     model_config = ConfigDict(extra="allow")
 
 
+class UserConfig(DynamicModel):
+    """
+    User-defined configuration namespace.
+    Allows dot-access to arbitrary keys defined in configuration under 'user:'.
+    """
+
+
 class ConcurrencyConfig(BaseModel):
-    """Configuration for task concurrency strategy."""
+    """
+    Configuration for task concurrency strategy.
+    Determines how work units are distributed across pipeline jobs.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -38,6 +56,7 @@ class ConcurrencyConfig(BaseModel):
 
     @model_validator(mode="after")
     def check_workers(self) -> "ConcurrencyConfig":
+        """Validate that workers count is present for non-biject methods."""
         if self.method in ["slice", "queue"]:
             if self.workers is None:
                 raise ValueError(
@@ -51,7 +70,10 @@ class ConcurrencyConfig(BaseModel):
 
 
 class QueueConfig(BaseModel):
-    """Configuration for queue-based dynamic concurrency."""
+    """
+    Configuration for queue-based dynamic concurrency.
+    Used when method='queue' to interface with message brokers like GCP Pub/Sub.
+    """
 
     model_config = ConfigDict(extra="allow")
 
@@ -62,6 +84,7 @@ class QueueConfig(BaseModel):
 
     @model_validator(mode="after")
     def check_queue(self) -> "QueueConfig":
+        """Ensure required fields are set for the selected platform."""
         if self.platform == "gcp":
             if not self.topic:
                 raise ValueError("queue.topic cannot be empty")
@@ -71,7 +94,10 @@ class QueueConfig(BaseModel):
 
 
 class RemoteConfig(BaseModel):
-    """Configuration for remote data synchronization."""
+    """
+    Configuration for remote data synchronization.
+    Defines where and how task outputs are stored and retrieved.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -86,6 +112,7 @@ class RemoteConfig(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def expand_env_vars(cls, data: Any) -> Any:
+        """Expand environment variables in root, url, and namespace strings."""
         if isinstance(data, dict):
             for k in ["root", "url", "namespace"]:
                 if data.get(k):
@@ -96,6 +123,7 @@ class RemoteConfig(BaseModel):
 
     @model_validator(mode="after")
     def check_sync(self) -> "RemoteConfig":
+        """Verify that sync requirements are met."""
         if self.pull_inputs or self.push_outputs:
             if not self.url or not self.root:
                 raise ValueError(
@@ -106,6 +134,7 @@ class RemoteConfig(BaseModel):
     @computed_field
     @property
     def total_root(self) -> Optional[str]:
+        """Base directory for local files, including optional namespace suffix."""
         if self.root and self.namespace:
             return f"{self.root}/{self.namespace}"
         return self.root
@@ -113,22 +142,17 @@ class RemoteConfig(BaseModel):
     @computed_field
     @property
     def total_url(self) -> Optional[str]:
+        """Remote URL for syncing, including optional namespace suffix."""
         if self.url and self.namespace:
             return f"{self.url}/{self.namespace}"
         return self.url
 
 
-def _dict_to_namespace(d: Any) -> Any:
-    """Recursively convert dict to namespace for dot-access."""
-    if isinstance(d, dict):
-        return SimpleNamespace(**{k: _dict_to_namespace(v) for k, v in d.items()})
-    if isinstance(d, list):
-        return [_dict_to_namespace(item) for item in d]
-    return d
-
-
 class TaskConfig(BaseModel):
-    """Unified configuration for a single task within SciCD."""
+    """
+    Unified configuration for a single task within SciCD.
+    Defines hardware requirements, container images, and runtime behavior.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -162,13 +186,15 @@ class TaskConfig(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def expand_image(cls, data: Any) -> Any:
+        """Expand environment variables in the image tag."""
         if isinstance(data, dict) and data.get("image"):
             data["image"] = os.path.expandvars(data["image"])
         return data
 
     @field_validator("memory", "disk", mode="before")
     @classmethod
-    def validate_memory_str(cls, v: Any) -> Any:
+    def validate_memory(cls, v: Any) -> Any:
+        """Normalize memory strings (e.g., '8GB' -> '8G')."""
         if v is None:
             return v
         if isinstance(v, int):
@@ -190,7 +216,8 @@ class TaskConfig(BaseModel):
 
     @field_validator("timeout", mode="before")
     @classmethod
-    def validate_time_str(cls, v: Any) -> Any:
+    def validate_time(cls, v: Any) -> Any:
+        """Normalize timeout strings (e.g., '1h30m' -> '1h 30m')."""
         if isinstance(v, int):
             return f"{v}m"
 
@@ -206,6 +233,7 @@ class TaskConfig(BaseModel):
 
     @model_validator(mode="after")
     def check_queue(self) -> "TaskConfig":
+        """Verify queue settings if concurrency method is 'queue'."""
         if self.concurrency.method == "queue":
             if (
                 self.queue.platform is None
@@ -216,47 +244,56 @@ class TaskConfig(BaseModel):
         return self
 
     @property
-    def user_ns(self) -> SimpleNamespace:
-        return _dict_to_namespace(self.user.model_dump())
-
-    @property
     def memory_mb(self) -> int:
+        """The memory requirement converted to megabytes (MiB)."""
         return self._parse_memory_to_mb(self.memory)
 
     @property
     def disk_mb(self) -> Optional[int]:
+        """The disk requirement converted to megabytes (MiB)."""
         if not self.disk:
             return None
         return self._parse_memory_to_mb(self.disk)
 
     @property
     def timeout_minutes(self) -> int:
+        """The timeout converted to total minutes."""
         return self._parse_time_to_minutes(self.timeout)
 
     @classmethod
     def _split_memory_str(cls, mem_str: str) -> Tuple[int, str]:
+        """Internal helper to split value and unit from memory string."""
         match = cls._MEM_REGEX.match(mem_str)
         if not match:
             raise ValueError(f"Could not match memory string: {mem_str}")
-
-        val = int(match.group(1))
-        unit = match.group(2).upper()
-        if "i" in mem_str.lower():
-            unit += "i"
-        return val, unit
+        value = int(match.group(1))
+        unit = match.group(2)
+        if mem_str.endswith("i"):
+            unit += match.group(3)
+        return (value, unit)
 
     @classmethod
     def _split_time_str(cls, time_str: str) -> list[str]:
-        matches = cls._TIME_REGEX.findall(time_str)
+        """Internal helper to split segments of a time string."""
+        pattern = r"(\d+)\s*([hms])"
+        matches = re.findall(pattern, time_str.lower())
         if not matches:
             raise ValueError(f"Could not split time string {time_str}")
-        return ["".join(m) for m in matches]
+        out_strs = ["".join(match) for match in matches]
+        return out_strs
 
     @classmethod
     def _parse_memory_to_mb(cls, mem_str: Optional[str]) -> Optional[int]:
+        """Internal helper to convert memory strings to MiB integers."""
         if mem_str is None:
             return None
-        value, unit = cls._split_memory_str(mem_str)
+        mem_str = mem_str.strip()
+        match = cls._MEM_REGEX.match(mem_str)
+        if not match:
+            raise ValueError(f"Could not match memory string: {mem_str}")
+        value = int(match.group(1))
+        unit = match.group(2).upper()
+        
         base_unit = unit.removesuffix("i").upper()
         multipliers = {"K": 1 / 1024, "M": 1, "G": 1024, "T": 1024 * 1024}
         mb = value * multipliers[base_unit]
@@ -264,13 +301,15 @@ class TaskConfig(BaseModel):
 
     @classmethod
     def _parse_time_to_minutes(cls, time_str: str) -> int:
-        matches = cls._TIME_REGEX.findall(time_str)
+        """Internal helper to convert time strings to minute integers."""
+        time_str = time_str.strip()
+        pattern = r"(\d+)\s*([hms])"
+        matches = re.findall(pattern, time_str.lower())
         if not matches:
             raise ValueError(f"Invalid time format: '{time_str}'")
         total_minutes = 0
         for value, unit in matches:
             value = int(value)
-            unit = unit.lower()
             if unit == "h":
                 total_minutes += value * 60
             elif unit == "m":
@@ -280,6 +319,10 @@ class TaskConfig(BaseModel):
         return total_minutes
 
     def merge(self, overrides: dict[str, Any]) -> "TaskConfig":
+        """
+        Create a new TaskConfig by merging an arbitrary dictionary into the current one.
+        Handles nested models recursively.
+        """
         current = self.model_dump(
             exclude_unset=False, exclude={"remote": {"total_root", "total_url"}}
         )
@@ -300,6 +343,7 @@ class WorkspaceConfig(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def expand_vars(cls, data: Any) -> Any:
+        """Expand environment variables in URL and project strings."""
         if isinstance(data, dict):
             if data.get("url"):
                 data["url"] = os.path.expandvars(data["url"])
@@ -375,7 +419,7 @@ def load_config(config_path: Optional[Union[str, Path]] = None) -> dict[str, Any
 
 
 class _ConfigManager:
-    """Internal config manager."""
+    """Internal singleton manager for configuration state."""
 
     _workspace: Optional[WorkspaceConfig] = None
     _base_task: Optional[TaskConfig] = None
@@ -415,6 +459,7 @@ class _ConfigManager:
 
     @classmethod
     def get_base_task(cls) -> TaskConfig:
+        """Get base task configuration singleton."""
         cls._initialize()
         return cls._base_task
 
@@ -430,6 +475,7 @@ class _ConfigManager:
 
     @classmethod
     def get_cli_overrides(cls) -> dict[str, Any]:
+        """Retrieve stored CLI overrides."""
         return cls._cli_overrides
 
     @classmethod
@@ -441,38 +487,19 @@ class _ConfigManager:
 
 
 def get_workspace() -> WorkspaceConfig:
-    """
-    Get workspace configuration singleton.
-
-    Loaded once from .scicd/config.yaml and cached.
-
-    Returns:
-        WorkspaceConfig singleton instance
-    """
+    """Get workspace configuration singleton."""
     return _ConfigManager.get_workspace()
 
 
 def get_base_task() -> TaskConfig:
-    """
-    Get base task configuration singleton.
-
-    Loaded once from .scicd/config.yaml and cached.
-
-    Returns:
-        TaskConfig singleton instance (defaults)
-    """
+    """Get base task configuration singleton."""
     return _ConfigManager.get_base_task()
 
 
 def set_base_task(task: TaskConfig):
     """
     Manually set the base task configuration singleton.
-
-    This is useful for applying global overrides (e.g., from the CLI)
-    that should affect all subsequently created TaskConfig objects.
-
-    Args:
-        task: The new base TaskConfig instance.
+    Affects all subsequently created TaskConfig objects.
     """
     _ConfigManager.set_base_task(task)
 
@@ -480,16 +507,7 @@ def set_base_task(task: TaskConfig):
 def get_task_config(**overrides) -> TaskConfig:
     """
     Get TaskConfig with optional runtime overrides.
-
-    Starts with base defaults from WorkspaceConfig,
-    then applies any overrides using the merge() method,
-    and finally applies CLI-level overrides (highest priority).
-
-    Args:
-        **overrides: Runtime overrides (cpu=16, memory='64Gi', tags=['gpu'], etc.)
-
-    Returns:
-        TaskConfig instance with overrides applied
+    Priority: Base Defaults -> Manual Overrides -> CLI Overrides.
     """
     # Start with cached base defaults from workspace
     task_config = get_base_task()
@@ -507,11 +525,7 @@ def get_task_config(**overrides) -> TaskConfig:
 
 
 def reset_config():
-    """
-    Reset all cached configuration.
-
-    Primarily for testing - forces reload on next get_* call.
-    """
+    """Reset all cached configuration."""
     _ConfigManager.reset()
 
 
@@ -523,15 +537,7 @@ def cascading_config(
     **kwargs,
 ) -> dict:
     """
-    Load a YAML file and apply cascading config logic based on kwargs.
-
-    Args:
-        filepath: Path to YAML file
-        root_key: Optional key (or list of keys) to jump into before looking for config/override
-        **kwargs: Parameters to match against override conditions
-
-    Returns:
-        Modified config dict after applying override rules
+    Load a YAML file and apply cascading config logic based on regex matching.
     """
     path = Path(filepath)
 
@@ -555,17 +561,7 @@ def cascading_config(
 
 
 def cascade(config: dict, override: list, **kwargs) -> dict:
-    """
-    Apply cascading override logic to a config dict.
-
-    Args:
-        config: Base configuration dictionary
-        override: List of override rules to apply
-        **kwargs: Parameters to match against override conditions
-
-    Returns:
-        Modified config dict after applying matching override rules
-    """
+    """Apply regex-based cascading override logic to a config dict."""
     out = config.copy()
     if not override:
         return out
@@ -580,12 +576,7 @@ def cascade(config: dict, override: list, **kwargs) -> dict:
 
 def intercept_cli_overrides(kwargs: dict[str, Any]) -> dict[str, Any]:
     """
-    Parses arbitrary CLI **kwargs. Keys matching TaskConfig fields are intercepted
-    and applied directly to the global base task configuration. The remaining keys
-    are returned as frontend-specific parameters.
-
-    Returns:
-        A dictionary containing only the frontend-specific parameters.
+    Parses CLI **kwargs, intercepts TaskConfig fields, and stores them as overrides.
     """
     task_overrides_flat = {}
     frontend_params = {}

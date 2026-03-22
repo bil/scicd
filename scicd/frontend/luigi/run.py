@@ -1,3 +1,5 @@
+"""Worker entrypoint for executing Luigi tasks."""
+
 import importlib
 import json
 import sys
@@ -7,18 +9,13 @@ import rich
 
 
 def run_task(module: str, target: str, params: str):
-    """
-    Worker entrypoint to execute a single Luigi task.
-    Used by CI jobs to run the actual work unit.
-    """
-    # Dynamically import the module
+    """Instantiate and execute a single Luigi task."""
     try:
         mod = importlib.import_module(module)
     except ImportError as e:
         rich.print(f"[bold red]Error:[/bold red] Could not find module '{module}'")
         raise e
 
-    # Get the task class from the module
     try:
         task_cls = getattr(mod, target)
     except AttributeError as e:
@@ -27,7 +24,6 @@ def run_task(module: str, target: str, params: str):
         )
         raise e
 
-    # Parse parameters
     try:
         param_dict = json.loads(params)
     except json.JSONDecodeError as e:
@@ -36,10 +32,8 @@ def run_task(module: str, target: str, params: str):
         )
         raise e
 
-    # Instantiate and Execute via Luigi
     try:
-        print(param_dict)
-        task_instance = task_cls(**param_dict)  # .from_str_params(param_dict)
+        task_instance = task_cls(**param_dict)
     except Exception as e:
         rich.print(
             f"[bold red]Error:[/bold red] Could not instantiate task '{target}' with params {param_dict}"
@@ -49,7 +43,6 @@ def run_task(module: str, target: str, params: str):
     rich.print(f"[bold blue]Executing Luigi Task:[/bold blue] {module}.{target}")
     rich.print(f"[bold blue]Parameters:[/bold blue] {param_dict}")
 
-    # Run the task
     success = luigi.build([task_instance], local_scheduler=True)
 
     if not success:

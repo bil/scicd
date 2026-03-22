@@ -1,11 +1,9 @@
-"""
-YAML and Jinja2 processing with Type Hints.
-"""
+"""YAML and Jinja2 processing utilities."""
 
 import os
 import re
 import pathlib
-from typing import Any, Dict, List, TypeVar, Union
+from typing import Any, TypeVar, Union
 from collections.abc import Mapping
 from copy import deepcopy
 
@@ -18,9 +16,7 @@ T = TypeVar("T")
 
 
 def yml_suffix(path: Union[str, pathlib.Path]) -> str:
-    """
-    Ensures a path has a valid YAML suffix by checking existence or appending default.
-    """
+    """Validate and return path with YAML suffix."""
     path = str(path)
     valid_suffixes = [".yml", ".yaml", ".yml.j2", ".yaml.j2"]
     if any(path.endswith(s) for s in valid_suffixes):
@@ -36,22 +32,18 @@ def yml_suffix(path: Union[str, pathlib.Path]) -> str:
 
 
 def expand_vars(data: T) -> T:
-    """
-    Recursively expands environment variables in strings.
-    """
+    """Expand environment variables in strings and nested structures."""
     if isinstance(data, dict):
         return {k: expand_vars(v) for k, v in data.items()}  # type: ignore
     if isinstance(data, list):
         return [expand_vars(v) for v in data]  # type: ignore
     if isinstance(data, str):
-        return os.path.expandvars(data)  # type: ignore
+        return os.environ.get(data[1:], data) if data.startswith('$') else os.path.expandvars(data) # type: ignore
     return data
 
 
-def find_includes(path: str) -> List[str]:
-    """
-    Extracts the 'include' list from YAML front-matter.
-    """
+def find_includes(path: str) -> list[str]:
+    """Extract 'include' list from YAML front-matter."""
     path = yml_suffix(path)
     if not pathlib.Path(path).exists():
         raise FileNotFoundError(f"Include file not found: {path}")
@@ -61,10 +53,8 @@ def find_includes(path: str) -> List[str]:
     return includes if isinstance(includes, list) else [includes]
 
 
-def deep_update(source: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Performs a recursive dictionary merge.
-    """
+def deep_update(source: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
+    """Perform recursive dictionary merge."""
     source = deepcopy(source)
     for key, value in overrides.items():
         if isinstance(value, Mapping) and value:
@@ -75,15 +65,9 @@ def deep_update(source: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[str, 
     return source
 
 
-def nest_dict(flat_dict: Dict[str, Any], delimiter: str = ".") -> Dict[str, Any]:
-    """
-    Converts a flat dictionary with delimited keys into a nested dictionary.
-
-    Example:
-        >>> nest_dict({"a.b.c": 1, "a.b.d": 2})
-        {'a': {'b': {'c': 1, 'd': 2}}}
-    """
-    nested: Dict[str, Any] = {}
+def nest_dict(flat_dict: dict[str, Any], delimiter: str = ".") -> dict[str, Any]:
+    """Convert flat dictionary with delimited keys to nested dictionary."""
+    nested: dict[str, Any] = {}
     for key, value in flat_dict.items():
         parts = key.split(delimiter)
         current = nested
@@ -98,22 +82,18 @@ def nest_dict(flat_dict: Dict[str, Any], delimiter: str = ".") -> Dict[str, Any]
     return nested
 
 
-def extract_context(path: str, **kwargs: Any) -> Dict[str, Any]:
-    """
-    Constructs a Jinja2 rendering context by recursively loading includes.
-    """
+def extract_context(path: str, **kwargs: Any) -> dict[str, Any]:
+    """Construct Jinja2 context by loading includes."""
     includes = find_includes(path)
-    context: Dict[str, Any] = {}
+    context: dict[str, Any] = {}
     for include in includes:
         context = deep_update(context, load_yaml(include))
     context = deep_update(context, kwargs)
     return context
 
 
-def load_metadata(path: str) -> Dict[str, Any]:
-    """
-    Retrieves the raw front-matter metadata from a file.
-    """
+def load_metadata(path: str) -> dict[str, Any]:
+    """Retrieve raw front-matter metadata from file."""
     path = yml_suffix(path)
     if not pathlib.Path(path).exists():
         return {}
@@ -121,17 +101,13 @@ def load_metadata(path: str) -> Dict[str, Any]:
 
 
 def render_string(template_str: str, **kwargs: Any) -> str:
-    """
-    Renders a Jinja2 template string with the given context.
-    """
+    """Render Jinja2 template string."""
     env = Environment()
     return env.from_string(template_str).render(**kwargs)
 
 
-def load_yaml(path: str, **kwargs: Any) -> Dict[str, Any]:
-    """
-    Renders Jinja2, parses YAML, and applies deep inheritance and variable expansion.
-    """
+def load_yaml(path: str, **kwargs: Any) -> dict[str, Any]:
+    """Parse YAML after Jinja2 rendering and deep inheritance."""
     path = yml_suffix(path)
     if not pathlib.Path(path).exists():
         raise FileNotFoundError(f"YAML file not found: {path}")
@@ -145,12 +121,13 @@ def load_yaml(path: str, **kwargs: Any) -> Dict[str, Any]:
 
     jinja_env = Environment()
     rendered = jinja_env.from_string(post.content).render(context)
-    data: Dict[str, Any] = yaml.safe_load(rendered) or {}
+    data: dict[str, Any] = yaml.safe_load(rendered) or {}
 
     return data
 
 
 def slugify(text: str) -> str:
+    """Convert text to alphanumeric slug with underscores."""
     # Replace anything that isn't a letter, number, or underscore with '_'
     # This handles periods, dashes, spaces, and weird symbols in one pass.
     clean = re.sub(r"[^a-zA-Z0-9_]", "_", text)

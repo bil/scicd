@@ -1,8 +1,10 @@
+"""Functional dispatch for exporting DAGs to platform-specific formats."""
+
 from scicd.backend.gitlab.decode import write_gitlab_yaml
 
 
 def export_dag(dag, filepath=None, backend="gitlab", **boilerplate):
-    """Functional dispatch to export a DAG using various backends."""
+    """Export abstract DAG to a specific backend format."""
     if backend == "gitlab":
         filepath = filepath or ".gitlab-ci.yml"
         return write_gitlab_yaml(dag, filepath=filepath, **boilerplate)

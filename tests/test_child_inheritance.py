@@ -32,6 +32,10 @@ class MockAdapter(BaseAdapter):
         return {}
 
     @property
+    def params_json(self):
+        return "{}"
+
+    @property
     def command(self):
         return ["echo", "hello"]
 

@@ -1,42 +1,42 @@
 """
-Universal Build Entrypoint for SciCD.
+Universal Build Orchestrator for SciCD.
+
+This module provides the top-level 'build' entrypoint that coordinates frontends 
+(framework-specific DAG encoders) and backends (platform-specific YAML generators).
 """
 
 from __future__ import annotations
+from typing import Optional
 
 import rich
-
 import scicd.config
-
 from scicd.frontend.luigi.encode import luigi2dag
 from scicd.backend.export import export_dag
-
-# =============================================================================
-# UNIVERSAL BUILD ENTRYPOINT
-# =============================================================================
 
 
 def build(
     module: str,
     target: str,
     frontend: str = "luigi",
-    backend: str = None,
-    filepath: str = None,
+    backend: Optional[str] = None,
+    filepath: Optional[str] = None,
     **kwargs,
 ):
     """
-    Universal build function.
-    Frontends encode a framework target into an abstract DAG.
-    Backends export the abstract DAG into a target format.
+    Execute the full SciCD build pipeline.
+    
+    1. Intercepts global TaskConfig overrides from kwargs.
+    2. Resolves the framework-specific target into an abstract DAG.
+    3. Exports the DAG into the requested backend format (e.g., GitLab YAML).
 
-    CLI Argument Namespacing:
-    --------------------------
-    - TaskConfig fields (cpu, memory, image): Override task defaults directly (e.g., --cpu 8).
-    - workspace_<key>: Blocked. Workspace settings must be set in config files.
-    - <other>:      Passed directly to the frontend (e.g., Luigi task params).
-                    For Luigi, use --TaskName-param val for task-specific params.
+    Args:
+        module: Python module containing the target work.
+        target: The specific class or rule name to build.
+        frontend: Framework to use for DAG resolution (default: 'luigi').
+        backend: Target platform format (e.g., 'gitlab'). Defaults to workspace platform.
+        filepath: Optional custom output path for the generated file.
+        **kwargs: Dynamic task-level overrides and frontend-specific parameters.
     """
-
     wspace = scicd.config.get_workspace()
     if backend is None:
         backend = wspace.platform

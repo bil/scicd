@@ -35,7 +35,7 @@ def test_luigi_adapter_properties(mocker):
     adapter = LuigiAdapter(task)
 
     assert adapter.name == "DummyTask"
-    assert adapter.params == {"date": "2024-01-01"}
+    assert adapter.params.model_dump() == {"date": "2024-01-01"}
 
     # Check config generation
     cfg = adapter.cfg
@@ -52,7 +52,8 @@ def test_luigi_adapter_command():
     Asserts that the adapter generates the correct 'scicd run' shell command.
 
     It verifies that the command includes the necessary module, family,
-    frontend flag, and correctly serialized JSON parameters.
+    and frontend flag, but no longer contains the JSON parameters (which
+    are now passed via environment variables).
     """
     task = DummyTask(date="2024-01-01")
     adapter = LuigiAdapter(task)
@@ -66,11 +67,10 @@ def test_luigi_adapter_command():
     assert "--frontend" in cmd
     assert "luigi" in cmd
 
-    # check that params is a valid json string
-    params_idx = cmd.index("--params") + 1
-    # Strip the single quotes around the json string
-    params_str = cmd[params_idx].strip("'")
-    params_dict = json.loads(params_str)
+    assert "--params" not in cmd
+
+    # check that params_json is valid
+    params_dict = json.loads(adapter.params_json)
     assert params_dict == {"date": "2024-01-01"}
 
 

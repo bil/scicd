@@ -2,21 +2,86 @@ default:
   image: python:3.10
   before_script:
   - pip install --upgrade pip
-  - pip install -r requirements.txt
-  - pip install pytest pytest-mock
-  - pip install -e .
+  - pip install -e .[test]
 workflow:
   rules:
   - if: $CI_PIPELINE_SOURCE == "push"
 stages:
 - stage_0
-RunTests:
+- stage_1
+CiPipeline:
+  tags:
+  - bilkube
+  timeout: 60m
+  stage: stage_1
+  script:
+  - scicd run --module utils.ci_tasks --target CiPipeline --frontend luigi
   variables:
-    KUBERNETES_CPU_REQUEST: 1
-    KUBERNETES_MEMORY_REQUEST: 4Gi
+    SCICD_PARAMS: '{}'
+  needs:
+  - RunTests_python_version_3_10
+  - RunTests_python_version_3_11
+  - RunTests_python_version_3_12
+  - RunTests_python_version_3_13
+  - RunTests_python_version_3_14
+  - RunTests_python_version_3_9
+RunTests_python_version_3_9:
+  image: python:3.9
   tags:
   - bilkube
   timeout: 60m
   stage: stage_0
   script:
-  - scicd run --module utils.ci_tasks --family RunTests --params '{}' --frontend luigi
+  - scicd run --module utils.ci_tasks --target RunTests --frontend luigi
+  variables:
+    SCICD_PARAMS: '{"python_version":"3.9"}'
+RunTests_python_version_3_10:
+  image: python:3.10
+  tags:
+  - bilkube
+  timeout: 60m
+  stage: stage_0
+  script:
+  - scicd run --module utils.ci_tasks --target RunTests --frontend luigi
+  variables:
+    SCICD_PARAMS: '{"python_version":"3.10"}'
+RunTests_python_version_3_11:
+  image: python:3.11
+  tags:
+  - bilkube
+  timeout: 60m
+  stage: stage_0
+  script:
+  - scicd run --module utils.ci_tasks --target RunTests --frontend luigi
+  variables:
+    SCICD_PARAMS: '{"python_version":"3.11"}'
+RunTests_python_version_3_12:
+  image: python:3.12
+  tags:
+  - bilkube
+  timeout: 60m
+  stage: stage_0
+  script:
+  - scicd run --module utils.ci_tasks --target RunTests --frontend luigi
+  variables:
+    SCICD_PARAMS: '{"python_version":"3.12"}'
+RunTests_python_version_3_13:
+  image: python:3.13
+  tags:
+  - bilkube
+  timeout: 60m
+  stage: stage_0
+  script:
+  - scicd run --module utils.ci_tasks --target RunTests --frontend luigi
+  variables:
+    SCICD_PARAMS: '{"python_version":"3.13"}'
+RunTests_python_version_3_14:
+  image: python:3.14
+  tags:
+  - bilkube
+  timeout: 60m
+  stage: stage_0
+  script:
+  - scicd run --module utils.ci_tasks --target RunTests --frontend luigi
+  variables:
+    SCICD_PARAMS: '{"python_version":"3.14"}'

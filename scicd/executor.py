@@ -1,26 +1,30 @@
 """
-Custom Executor Registry for SciCD.
+Custom Executor Discovery and Registry for SciCD.
+
+This module allows users to define custom 'executors' that map specific task tags
+(like 'gpu' or 'slurm') to environment variables and configuration overrides.
 """
 
 import os
 import importlib.util
 from pathlib import Path
-from typing import Callable, NamedTuple, Iterable, Dict
+from typing import Callable, NamedTuple, Iterable
 
 
 class Executor(NamedTuple):
+    """Represents a registered custom executor and its transformation function."""
     name: str
     func: Callable
 
 
 class _ExecutorRegistry:
-    """Internal manager for custom executors."""
+    """Internal singleton manager for custom executor discovery and storage."""
 
-    _registry: Dict[frozenset[str], Executor] = {}
+    _registry: dict[frozenset[str], Executor] = {}
     _loaded: bool = False
 
     @classmethod
-    def get_registry(cls) -> Dict[frozenset[str], Executor]:
+    def get_registry(cls) -> dict[frozenset[str], Executor]:
         """Lazy-load and return the executor registry."""
         if not cls._loaded:
             cls._loaded = True
@@ -29,25 +33,25 @@ class _ExecutorRegistry:
 
     @classmethod
     def _load_custom_executors(cls):
-        """Load custom executors from standard locations."""
+        """Search for and load custom executors from standard locations."""
 
-        # Environment Variable
+        # 1. Environment Variable Override
         env_path = os.getenv("SCICD_EXECUTORS_PATH")
         if env_path:
             p = Path(env_path)
             if p.exists():
                 cls._load_from_path(p)
-                return  # If env var is set and exists, only use that
+                return
             raise FileNotFoundError(
                 f"Executor file specified in SCICD_EXECUTORS_PATH not found: {env_path}"
             )
 
-        # Check for single file
+        # 2. Default single file
         executor_file = Path(".scicd/executors.py")
         if executor_file.exists():
             cls._load_from_path(executor_file)
 
-        # Check for directory
+        # 3. Default directory
         executor_directory = Path(".scicd/executors")
         if executor_directory.exists() and executor_directory.is_dir():
             for path in executor_directory.iterdir():
@@ -56,24 +60,26 @@ class _ExecutorRegistry:
 
     @classmethod
     def _load_from_path(cls, path: Path):
-        """Helper to load a module from a specific path."""
+        """Load a Python module from a disk path and trigger registration."""
         spec = importlib.util.spec_from_file_location("scicd_user_executors", path)
         if spec and spec.loader:
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
-            # Printing is helpful for verifying discovery in CI logs
             print(f"SciCD: Loaded custom executors from {str(path)}")
 
     @classmethod
     def reset(cls):
-        """Reset the registry state."""
+        """Reset the internal registry state."""
         cls._registry.clear()
         cls._loaded = False
 
 
 def register_executor(tags: Iterable[str], name: str = None):
     """
-    Decorator to register an executor function.
+    Decorator to register a function as a SciCD executor for a set of tags.
+    
+    The decorated function should take a TaskConfig and return a dict of 
+    environment variables to inject into the CI/CD job.
     """
 
     def decorator(func: Callable):
@@ -82,7 +88,6 @@ def register_executor(tags: Iterable[str], name: str = None):
             name = func.__name__
 
         registry = _ExecutorRegistry.get_registry()
-        # Use frozenset for hashable dictionary key
         tag_set = frozenset(tags)
         registry[tag_set] = Executor(name, func)
         return func
@@ -91,7 +96,9 @@ def register_executor(tags: Iterable[str], name: str = None):
 
 
 def get_executor(tags: Iterable[str]) -> Executor:
-    """Find the matching executor for the given tags (strict match)."""
+    """
+    Find the executor that matches the given tags exactly.
+    """
     registry = _ExecutorRegistry.get_registry()
     task_tags = frozenset(tags)
 
@@ -102,8 +109,5 @@ def get_executor(tags: Iterable[str]) -> Executor:
 
 
 def reset_executors():
-    """
-    Reset the executor registry.
-    Primarily used for testing to ensure a clean state.
-    """
+    """Reset all cached executors (for testing)."""
     _ExecutorRegistry.reset()

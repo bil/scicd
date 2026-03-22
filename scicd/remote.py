@@ -1,6 +1,4 @@
-"""
-Remote syncing utilities for SciCD.
-"""
+"""Remote data synchronization utilities for SciCD."""
 
 import os
 import subprocess
@@ -27,21 +25,13 @@ def push(
         Path,
         Parameter(
             show_default=False,
-            help="One or more local file paths to archive to the remote.",
+            help="Local file paths to archive to the remote.",
         ),
     ]
 ) -> bool:
-    """
-    Push specific local files to the remote archive.
-
-    This is typically called automatically by a task upon successful completion.
-
-    Example:
-        python3 -m scicd.remote push results/plot.png results/data.csv
-    """
+    """Archive specific local files to remote storage."""
     task_config = scicd.config.get_task_config()
     wspace = scicd.config.get_workspace()
-    # Ensure absolute!
     files = [file.resolve() for file in files]
 
     if not task_config.remote:
@@ -62,19 +52,11 @@ def pull(
     *files: Annotated[
         Path,
         Parameter(
-            show_default=False, help="One or more remote file paths to recover locally."
+            show_default=False, help="Remote file paths to recover locally."
         ),
     ]
 ) -> bool:
-    """
-    Pull specific files from the remote archive to local storage.
-
-    Used for 'Lazy Hydration'—recovering only the upstream dependencies
-    needed for a specific task.
-
-    Example:
-        python3 -m scicd.remote pull results/raw_data.fits
-    """
+    """Recover specific files from remote storage to local filesystem."""
     task_config = scicd.config.get_task_config()
     wspace = scicd.config.get_workspace()
 
@@ -93,13 +75,7 @@ def pull(
 
 @app.command()
 def pull_full() -> bool:
-    """
-    Perform a complete sync (Global Init) from remote to local.
-
-    STRICT REQUIREMENT: This command only supports 'rclone' protocols.
-    It is intended for stage_00 of GitLab pipelines to populate the
-    persistent storage with existing baseline data.
-    """
+    """Sync all remote data to local filesystem (rclone only)."""
     task_config = scicd.config.get_task_config()
 
     if (
@@ -130,7 +106,7 @@ def _https_batch(
     files: list[Path],
     direction="push",
 ) -> bool:
-    """HTTPS implementation using requests Session for connection pooling."""
+    """Execute HTTPS sync for multiple files using requests.Session."""
     if (
         not task_config.remote
         or not files
@@ -142,15 +118,12 @@ def _https_batch(
     local_root = Path(task_config.remote.total_root)
     base_url = task_config.remote.total_url.rstrip("/")
 
-    # Use a session to reuse the TCP connection for multiple files
     with requests.Session() as session:
-        # Add auth if your workspace config provides it
         if getattr(wspace, "https_header", None):
             session.headers.update(getattr(wspace, "https_header"))
 
         for local_p in files:
             try:
-                print(local_p, base_url, local_root)
                 rel_path = local_p.relative_to(local_root)
                 url = f"{base_url}/{rel_path}"
 
@@ -158,14 +131,12 @@ def _https_batch(
                     if not local_p.exists():
                         continue
                     with open(local_p, "rb") as f:
-                        # We use PUT here as it's the standard for 'copyto' behavior
                         response = session.put(url, data=f, timeout=60)
                         response.raise_for_status()
                 else:
-                    # Direction is PULL
                     response = session.get(url, stream=True, timeout=60)
                     if response.status_code == 404:
-                        return False  # Fail early if a required file is missing
+                        return False
                     response.raise_for_status()
 
                     local_p.parent.mkdir(parents=True, exist_ok=True)
@@ -183,6 +154,7 @@ def _https_batch(
 def _rclone_batch(
     task_config: scicd.config.TaskConfig, files: list[Path], direction="push"
 ) -> bool:
+    """Execute rclone sync using --files-from for batching."""
     if (
         not task_config.remote
         or not files

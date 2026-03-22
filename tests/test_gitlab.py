@@ -39,8 +39,12 @@ class MockAdapter(BaseAdapter):
         return self._cfg
 
     @property
+    def params_json(self):
+        return json.dumps(self.params)
+
+    @property
     def command(self):
-        return ["scicd", "run-luigi", "--params", json.dumps(self.params)]
+        return ["scicd", "run", "--module", "mod", "--target", self.name]
 
     @property
     def identifier(self):
@@ -54,7 +58,7 @@ def test_gitlab_yml_lint_and_json_params(tmp_path):
     This test:
     1. Generates a .gitlab-ci.yml file from a BijectNode.
     2. Uses PyYAML to load and lint the generated file.
-    3. Asserts that task parameters (passed via --params) are correctly encoded as valid JSON strings.
+    3. Asserts that task parameters are passed via the SCICD_PARAMS env var.
     """
     adapter = MockAdapter("MyTask", {"id": 123}, "MyTask_123")
     node = BijectNode(work=[adapter], rank=0, node_deps=[])
@@ -70,14 +74,10 @@ def test_gitlab_yml_lint_and_json_params(tmp_path):
     assert config["image"] == "python:3.10"
     assert "MyTask_123" in config
 
-    # JSON Validation: Assert that --params in script is valid JSON
-    job_script = config["MyTask_123"]["script"][0]
-    assert "--params" in job_script
-
-    # Use shlex to parse the command line safely
-    args = shlex.split(job_script)
-    idx = args.index("--params")
-    json_str = args[idx + 1]
+    # env var Validation: Assert that SCICD_PARAMS in variables is valid JSON
+    variables = config["MyTask_123"]["variables"]
+    assert "SCICD_PARAMS" in variables
+    json_str = variables["SCICD_PARAMS"]
 
     params = json.loads(json_str)
     assert params["id"] == 123
@@ -103,9 +103,13 @@ def test_slice_node_child_yml_generation():
 
     # The first job is the generator
     gen_job_id = next(k for k in jobs[0].keys())
-    gen_script = jobs[0][gen_job_id]["script"][0]
+    gen_job = jobs[0][gen_job_id]
+    gen_script = gen_job["script"][0]
 
     assert "scicd.slice generate" in gen_script
+    assert "SCICD_COMMANDS_JSON" in gen_job["variables"]
+    assert "SCICD_CFG_JSON" in gen_job["variables"]
+    assert "SCICD_GITLAB_INFO_JSON" in gen_job["variables"]
 
     # Now test the generation logic itself from scicd.slice
 

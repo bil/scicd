@@ -2,9 +2,10 @@
 Tests for the Directed Acyclic Graph (DAG) construction and rendering.
 """
 
+import json
 from scicd.dag import BijectNode, SliceNode, DAG
 from scicd.adapter import BaseAdapter
-from scicd.config import TaskConfig
+from scicd.config import TaskConfig, ConcurrencyConfig
 from scicd.backend.gitlab.decode import render_node_gitlab, render_gitlab
 
 
@@ -24,8 +25,9 @@ class MockAdapter(BaseAdapter):
         return self._name
 
     @property
-    def params(self):
-        return self._params
+    def params(self) -> TaskConfig:
+        from scicd.config import DynamicModel
+        return DynamicModel.model_validate(self._params)
 
     @property
     def cfg(self):

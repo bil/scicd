@@ -18,7 +18,7 @@ setup(
         "requests",
         "pydantic",
     ],
-    extras_require={"test": ["pytest>=9.0.0", "pytest-mock>=3.12.0", "pylint-pydantic"]},
+    extras_require={"test": ["pytest", "pytest-mock"]},
     entry_points={
         "console_scripts": [
             "scicd=scicd.cli:app",

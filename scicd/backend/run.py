@@ -1,3 +1,5 @@
+"""Backend dispatch utilities for CI/CD operations."""
+
 from scicd.backend.gitlab.pipeline import run_pipeline as run_gitlab_pipeline
 from scicd.backend.gitlab.pipeline import lint_pipeline as lint_gitlab_pipeline
 
@@ -9,7 +11,7 @@ def run_pipeline(
     project: str = None,
     **variables,
 ):
-    """Functional dispatch to trigger a remote CI/CD pipeline."""
+    """Trigger a remote CI/CD pipeline run."""
     if backend == "gitlab":
         run_gitlab_pipeline(branch=branch, url=url, project=project, **variables)
         return
@@ -24,7 +26,7 @@ def lint_pipeline(
     url: str = None,
     project: str = None,
 ):
-    """Functional dispatch to validate a generated CI/CD YAML file."""
+    """Validate a generated CI/CD YAML configuration file."""
     if backend == "gitlab":
         return lint_gitlab_pipeline(yml_filepath=yml_filepath, url=url, project=project)
     if backend == "github":

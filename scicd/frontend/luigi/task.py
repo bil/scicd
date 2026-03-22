@@ -1,30 +1,26 @@
-"""
-Luigi task augmentation factory for SciCD.
-"""
+"""Luigi task augmentation factory for SciCD."""
 
 import hashlib
 import json
 from functools import cached_property
 from pathlib import Path
-from types import SimpleNamespace
-from typing import Any, Dict, Type, TypeVar, cast
+from typing import Any, Type, TypeVar, cast
 
 import luigi
 import rich
 
 import scicd.config
 import scicd.remote
+from scicd.config import DynamicModel
 from scicd.git import get_git_commit
 from scicd.yamler import deep_update, nest_dict
 
 T = TypeVar("T", bound=luigi.Task)
 
 
-def _normalize_luigi_resources(resources: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Normalize Luigi's resources() dict to SciCD TaskConfig format.
-    """
-    normalized: Dict[str, Any] = {}
+def _normalize_luigi_resources(resources: dict[str, Any]) -> dict[str, Any]:
+    """Normalize Luigi resources() dict to TaskConfig format."""
+    normalized: dict[str, Any] = {}
 
     # CPU: direct pass-through (integer = cores)
     if "cpu" in resources:
@@ -52,8 +48,8 @@ def _normalize_luigi_resources(resources: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def get_task_config(task: luigi.Task) -> "scicd.config.TaskConfig":
-    """Extract task-specific configuration for a Luigi task instance."""
-    overrides: Dict[str, Any] = {}
+    """Extract and resolve TaskConfig for a Luigi task instance."""
+    overrides: dict[str, Any] = {}
 
     # Luigi native resources()
     resources = getattr(task, "resources", {})
@@ -87,23 +83,7 @@ def get_task_config(task: luigi.Task) -> "scicd.config.TaskConfig":
 def augment_task(
     cls: Type[T], hash_cfg: bool = True, hash_commit: bool = True
 ) -> Type[T]:
-    """
-    Class factory that augments a standard Luigi task with SciCD features.
-
-    Features injected:
-    1. Standardized 'output_path' property anchored to workspace root.
-    2. 'complete()' override that attempts to pull missing outputs from remote.
-    3. Self-contained event handlers for directory creation and remote pushing.
-    4. (Optional) Fingerprint-based completion checks (default: True).
-
-    Args:
-        cls: The base Luigi task class to augment.
-        hash: If True, enables content-based fingerprinting.
-        hash_commit: If True, include current commit as part of fingerprint.
-
-    Returns:
-        A new class inheriting from 'cls' with SciCD capabilities.
-    """
+    """Augment a Luigi task class with SciCD features (sync, pathing, fingerprinting)."""
 
     class Task(cls):
         """Internal augmented class."""
@@ -120,25 +100,22 @@ def augment_task(
 
         @cached_property
         def workspace(self):
-            """Global workspace configuration."""
+            """Get global WorkspaceConfig."""
             return scicd.config.get_workspace()
 
         @cached_property
         def task_config(self):
-            """Task configuration with overrides."""
+            """Get resolved TaskConfig for this task."""
             return get_task_config(self)
 
         @property
         def path(self) -> str:
-            """
-            Subpath for task outputs.
-            Override this or the 'path' method in your task.
-            """
+            """Return subpath for task outputs."""
             return ""
 
         @cached_property
         def output_path(self) -> Path:
-            """Standardized base directory for task outputs."""
+            """Return workspace-anchored base directory for task outputs."""
             base_dir = "."
             if self.task_config.remote and self.task_config.remote.root:
                 base_dir = self.task_config.remote.total_root
@@ -148,14 +125,10 @@ def augment_task(
             return Path(base_dir) / str(subpath)
 
         @cached_property
-        def cfg_dict(self) -> Dict[str, Any]:
-            """Raw dictionary of 'insignificant' parameters from YAML/TOML."""
+        def cfg_dict(self) -> dict[str, Any]:
+            """Return dict of cascading configuration parameters."""
             user_cfg = self.task_config.user
-            path_cascade = (
-                user_cfg.get("path_cascade")
-                if isinstance(user_cfg, dict)
-                else getattr(user_cfg, "path_cascade", None)
-            )
+            path_cascade = getattr(user_cfg, "path_cascade", None)
 
             if not path_cascade:
                 return {}
@@ -165,12 +138,12 @@ def augment_task(
             )
 
         @cached_property
-        def cfg(self) -> Any:
-            """Dot-access wrapper for configuration."""
-            return SimpleNamespace(**self.cfg_dict)
+        def cfg(self) -> DynamicModel:
+            """Return DynamicModel wrapper for cascading configuration."""
+            return DynamicModel.model_validate(self.cfg_dict)
 
         def get_fingerprint(self) -> str:
-            """Unique hash of code version, params, and config."""
+            """Generate deterministic hash of task state."""
             data = {
                 "params": self.param_kwargs,
                 "config": self.cfg_dict,
@@ -178,11 +151,12 @@ def augment_task(
             if self.hashed_commit:
                 data["commit"] = get_git_commit()
 
-            dump = json.dumps(data, sort_keys=True)
+            # Deterministic JSON dump using Pydantic's optimized logic
+            dump = DynamicModel.model_validate(data).model_dump_json()
             return hashlib.sha256(dump.encode()).hexdigest()[:12]
 
         def _check_fingerprints(self) -> bool:
-            """Verify all outputs have valid fingerprints matching current state."""
+            """Verify existence and validity of all output fingerprints."""
             outputs = luigi.task.flatten(self.output())
             current_fp = self.get_fingerprint()
             for ot in outputs:
@@ -198,9 +172,7 @@ def augment_task(
             return True
 
         def complete(self) -> bool:
-            """
-            Augmented completion check with self-healing (auto-pull).
-            """
+            """Perform local completion check with optional remote pull."""
             # Perform standard check first
             is_complete = super().complete()
             if is_complete:
@@ -271,7 +243,7 @@ def augment_task(
 
     @Task.event_handler(luigi.Event.START)
     def _scicd_on_start(task):
-        """Prepare environment before task runs."""
+        """Prepare local environment before task execution."""
         rich.print(
             f"[bold blue]SciCD:[/bold blue] Starting execution for [cyan]{task.task_id}[/cyan]"
         )
@@ -282,7 +254,7 @@ def augment_task(
 
     @Task.event_handler(luigi.Event.SUCCESS)
     def _scicd_on_success(task):
-        """Handle checkpointing and remote pushing."""
+        """Execute checkpointing and remote push upon task success."""
         rich.print(
             f"[bold green]SciCD:[/bold green] Task [cyan]{task.task_id}[/cyan] completed successfully."
         )
