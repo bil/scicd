@@ -6,10 +6,9 @@ def export_dag(dag, filepath=None, backend="gitlab", **boilerplate):
     if backend == "gitlab":
         filepath = filepath or ".gitlab-ci.yml"
         return write_gitlab_yaml(dag, filepath=filepath, **boilerplate)
-    elif backend == "github":
+    if backend == "github":
         raise NotImplementedError("GitHub Actions backend is not yet implemented.")
-    elif backend == "dot":
+    if backend == "dot":
         filepath = filepath or "dag.dot"
         return dag.export_dot(filepath)
-    else:
-        raise ValueError(f"Unsupported backend: {backend}")
+    raise ValueError(f"Unsupported backend: {backend}")

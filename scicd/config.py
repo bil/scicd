@@ -554,11 +554,11 @@ class TaskConfig:
             if k in fields_map:
                 target_type = fields_map[k]
                 try:
-                    if target_type == int or target_type == Optional[int]:
+                    if target_type in [int, Optional[int]]:
                         casted_overrides[k] = int(v)
-                    elif target_type == float or target_type == Optional[float]:
+                    elif target_type in [float, Optional[float]]:
                         casted_overrides[k] = float(v)
-                    elif target_type == bool or target_type == Optional[bool]:
+                    elif target_type in [bool, Optional[bool]]:
                         casted_overrides[k] = str(v).lower() in ("true", "1", "yes")
                 except (ValueError, TypeError):
                     pass
@@ -571,10 +571,9 @@ def _dict_to_namespace(d: Any) -> Any:
     """Recursively convert dict to namespace for dot-access."""
     if isinstance(d, dict):
         return SimpleNamespace(**{k: _dict_to_namespace(v) for k, v in d.items()})
-    elif isinstance(d, list):
+    if isinstance(d, list):
         return [_dict_to_namespace(item) for item in d]
-    else:
-        return d
+    return d
 
 
 @dataclass

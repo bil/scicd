@@ -69,8 +69,7 @@ class BijectNode(BaseNode):
 
         if param_str:
             return f"{self.work[0].name}\\n({param_str})"
-        else:
-            return self.work[0].name
+        return self.work[0].name
 
 
 @dataclass

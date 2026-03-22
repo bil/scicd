@@ -11,6 +11,7 @@ import scicd.config
 
 from scicd.frontend.luigi.encode import luigi2dag
 from scicd.backend.export import export_dag
+from scicd.yamler import nest_dict
 
 # =============================================================================
 # UNIVERSAL BUILD ENTRYPOINT
@@ -41,8 +42,6 @@ def build(
     wspace = scicd.config.get_workspace()
     if backend is None:
         backend = wspace.platform
-
-    from scicd.yamler import nest_dict
 
     task_overrides_flat = {}
     frontend_params = {}
