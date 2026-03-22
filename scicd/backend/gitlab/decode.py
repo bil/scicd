@@ -6,6 +6,7 @@ from copy import deepcopy
 from typing import Any
 
 import yaml
+import rich
 
 import scicd.yamler
 from scicd.config import TaskConfig, get_workspace
@@ -25,6 +26,9 @@ def gitlab_info(cfg: TaskConfig) -> dict:
     if cfg.tags:
         try:
             executor = get_executor(cfg.tags)
+            rich.print(
+                f"[bold blue]SciCD:[/bold blue] Matched tags {list(cfg.tags)} to executor [cyan]{executor.name}[/cyan]"
+            )
             executor_vars = executor.func(cfg)
             if executor_vars:
                 variables.update(executor_vars)

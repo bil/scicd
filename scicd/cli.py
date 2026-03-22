@@ -62,6 +62,9 @@ def local(
     frontend: Annotated[
         str, Parameter(help="Frontend to parse the DAG (e.g. luigi)")
     ] = "luigi",
+    workers: Annotated[
+        int, Parameter(help="Number of local workers to use for execution.")
+    ] = 1,
     **kwargs: Annotated[str, Parameter(help="Dynamic overrides", group="Overrides")],
 ):
     """
@@ -72,7 +75,7 @@ def local(
 
     if frontend == "luigi":
         task = load_luigi_task(module, target, **frontend_params)
-        luigi.build([task], local_scheduler=True)
+        luigi.build([task], local_scheduler=True, workers=workers)
     else:
         raise ValueError(f"Unsupported frontend: {frontend}")
 
