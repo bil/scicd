@@ -3,10 +3,11 @@ python-gitlab
 python-frontmatter
 luigi
 cyclopts
-tomli
 Jinja2
 PyYAML
 rich
 requests
 pytest
 pytest-mock
+pydantic
+pylint-pydantic

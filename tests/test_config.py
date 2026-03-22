@@ -13,6 +13,10 @@ from scicd.config import (
 )
 
 
+from pydantic import ValidationError
+from unittest.mock import patch
+
+
 def test_task_config_validation():
     """
     Ensures that TaskConfig correctly validates its input parameters.
@@ -20,16 +24,16 @@ def test_task_config_validation():
     Checks that CPU counts, retries, memory formats, and timeout strings
     adhere to expected formats and constraints.
     """
-    with pytest.raises(ValueError, match="cpu must be positive"):
+    with pytest.raises(ValidationError, match="cpu"):
         TaskConfig(cpu=0)
 
-    with pytest.raises(ValueError, match="retry cannot be negative"):
+    with pytest.raises(ValidationError, match="retry"):
         TaskConfig(retry=-1)
 
-    with pytest.raises(ValueError, match="Invalid memory format"):
+    with pytest.raises(ValidationError, match="memory"):
         TaskConfig(memory="invalid")
 
-    with pytest.raises(ValueError, match="Invalid timeout format"):
+    with pytest.raises(ValidationError, match="timeout"):
         TaskConfig(timeout="invalid")
 
 
@@ -78,7 +82,7 @@ def test_workspace_config():
     )
     assert ws.platform == "github"
 
-    with pytest.raises(TypeError):
+    with pytest.raises(ValidationError):
         WorkspaceConfig(cpu=4)
 
 
@@ -99,7 +103,8 @@ def test_cascade():
     assert out["b"] == 3
 
 
-def test_get_task_config_overrides(mocker):
+@patch("scicd.config.load_config")
+def test_get_task_config_overrides(mock_load_config):
     """
     Tests the global get_task_config entrypoint.
 
@@ -107,7 +112,7 @@ def test_get_task_config_overrides(mocker):
     the provided manual overrides on top of it.
     """
     _ConfigManager.reset()
-    mocker.patch("scicd.config.load_config", return_value={"cpu": 2})
+    mock_load_config.return_value = {"cpu": 2}
     cfg = get_task_config(memory="16Gi")
     assert cfg.cpu == 2
     assert cfg.memory == "16Gi"

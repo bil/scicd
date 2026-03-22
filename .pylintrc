@@ -1,0 +1,2 @@
+[TYPECHECK]
+disable=C0103 # variable names

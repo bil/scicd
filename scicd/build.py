@@ -3,7 +3,6 @@ Universal Build Entrypoint for SciCD.
 """
 
 from __future__ import annotations
-import dataclasses
 
 import rich
 
@@ -11,7 +10,6 @@ import scicd.config
 
 from scicd.frontend.luigi.encode import luigi2dag
 from scicd.backend.export import export_dag
-from scicd.yamler import nest_dict
 
 # =============================================================================
 # UNIVERSAL BUILD ENTRYPOINT

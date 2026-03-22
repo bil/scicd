@@ -141,7 +141,7 @@ def augment_task(
             """Standardized base directory for task outputs."""
             base_dir = "."
             if self.task_config.remote and self.task_config.remote.root:
-                base_dir = self.task_config.remote.get_root()
+                base_dir = self.task_config.remote.total_root
 
             subpath = self.path
 
@@ -204,8 +204,21 @@ def augment_task(
             # Perform standard check first
             is_complete = super().complete()
             if is_complete:
-                if not self.hashed or self._check_fingerprints():
+                if not self.hashed:
+                    rich.print(
+                        f"[bold green]SciCD:[/bold green] Task [cyan]{self.task_id}[/cyan] detected as complete (local files)."
+                    )
                     return True
+
+                if self._check_fingerprints():
+                    rich.print(
+                        f"[bold green]SciCD:[/bold green] Task [cyan]{self.task_id}[/cyan] detected as complete (local files + valid fingerprint)."
+                    )
+                    return True
+
+                rich.print(
+                    f"[bold yellow]SciCD:[/bold yellow] Task [cyan]{self.task_id}[/cyan] local files exist, but fingerprint is invalid/missing."
+                )
 
             # Remote check: If missing locally, try to pull from remote
             if (
@@ -224,22 +237,30 @@ def augment_task(
                         )
                     files_to_pull.extend(fp_files)
                 if files_to_pull:
-                    rich.print(f"[bold blue]SciCD:[/bold blue] Task [cyan]{self.task_id}[/cyan] outputs missing locally. Attempting to pull from remote...")
+                    rich.print(
+                        f"[bold blue]SciCD:[/bold blue] Task [cyan]{self.task_id}[/cyan] outputs missing locally. Attempting to pull from remote..."
+                    )
                     for f in files_to_pull:
                         rich.print(f"  -> [dim]{f}[/dim]")
                     if scicd.remote.pull(*files_to_pull):
                         # Re-verify everything after the pull
                         if self.hashed:
                             if self._check_fingerprints():
-                                rich.print(f"[bold green]SciCD:[/bold green] Successfully pulled and verified outputs for [cyan]{self.task_id}[/cyan].")
+                                rich.print(
+                                    f"[bold green]SciCD:[/bold green] Successfully pulled and verified outputs for [cyan]{self.task_id}[/cyan]."
+                                )
                                 return True
                             else:
-                                rich.print(f"[bold yellow]SciCD:[/bold yellow] Pulled outputs for [cyan]{self.task_id}[/cyan], but fingerprints do not match current code/config state.")
+                                rich.print(
+                                    f"[bold yellow]SciCD:[/bold yellow] Pulled outputs for [cyan]{self.task_id}[/cyan], but fingerprints do not match current code/config state."
+                                )
                                 return False
-                        
+
                         is_complete_now = super().complete()
                         if is_complete_now:
-                            rich.print(f"[bold green]SciCD:[/bold green] Successfully pulled outputs for [cyan]{self.task_id}[/cyan].")
+                            rich.print(
+                                f"[bold green]SciCD:[/bold green] Successfully pulled outputs for [cyan]{self.task_id}[/cyan]."
+                            )
                         return is_complete_now
 
             return False
@@ -251,7 +272,9 @@ def augment_task(
     @Task.event_handler(luigi.Event.START)
     def _scicd_on_start(task):
         """Prepare environment before task runs."""
-        rich.print(f"[bold blue]SciCD:[/bold blue] Starting execution for [cyan]{task.task_id}[/cyan]")
+        rich.print(
+            f"[bold blue]SciCD:[/bold blue] Starting execution for [cyan]{task.task_id}[/cyan]"
+        )
         # Ensure output directories exist
         for target in luigi.task.flatten(task.output()):
             if hasattr(target, "path"):
@@ -260,9 +283,14 @@ def augment_task(
     @Task.event_handler(luigi.Event.SUCCESS)
     def _scicd_on_success(task):
         """Handle checkpointing and remote pushing."""
-        rich.print(f"[bold green]SciCD:[/bold green] Task [cyan]{task.task_id}[/cyan] completed successfully.")
+        rich.print(
+            f"[bold green]SciCD:[/bold green] Task [cyan]{task.task_id}[/cyan] completed successfully."
+        )
         if task.hashed:
             current_fp = task.get_fingerprint()
+            rich.print(
+                f"[bold blue]SciCD:[/bold blue] Saved fingerprint [green]{current_fp}[/green] for [cyan]{task.task_id}[/cyan]."
+            )
             for ot in luigi.task.flatten(task.output()):
                 if hasattr(ot, "path"):
                     p = Path(ot.path)
@@ -290,10 +318,16 @@ def augment_task(
                         files_to_push.append(fp_file)
 
             if files_to_push:
-                rich.print(f"[bold blue]SciCD:[/bold blue] Pushing {len(files_to_push)} items to remote for [cyan]{task.task_id}[/cyan]...")
+                rich.print(
+                    f"[bold blue]SciCD:[/bold blue] Pushing {len(files_to_push)} items to remote for [cyan]{task.task_id}[/cyan]..."
+                )
                 for f in files_to_push:
                     rich.print(f"  -> [dim]{f}[/dim]")
                 scicd.remote.push(*files_to_push)
+        else:
+            rich.print(
+                f"[bold yellow]SciCD:[/bold yellow] Skipping push for [cyan]{task.task_id}[/cyan] (local execution or push_outputs=False)."
+            )
 
     # Preserve metadata
     Task.__name__ = cls.__name__

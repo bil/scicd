@@ -3,7 +3,6 @@ CLI interface for scicd using Cyclopts.
 """
 
 import os
-import dataclasses
 import sys
 from typing import Annotated, Optional
 
@@ -49,11 +48,10 @@ def run(
 @app.command()
 def local(
     module: Annotated[
-        str, Parameter(help="The Python module containing the target.", group="Required")
+        str,
+        Parameter(help="The Python module containing the target.", group="Required"),
     ],
-    target: Annotated[
-        str, Parameter(help="The target class.", group="Required")
-    ],
+    target: Annotated[str, Parameter(help="The target class.", group="Required")],
     frontend: Annotated[
         str, Parameter(help="Frontend to parse the DAG (e.g. luigi)")
     ] = "luigi",
@@ -61,7 +59,7 @@ def local(
 ):
     """Run a task locally for development."""
     frontend_params = scicd.config.intercept_cli_overrides(kwargs)
-    
+
     if frontend == "luigi":
         task = load_luigi_task(module, target, **frontend_params)
         luigi.build([task], local_scheduler=True)
@@ -176,13 +174,13 @@ def config(
     task_cfg = scicd.config.get_task_config()
 
     rich.print("[bold green]Workspace Config:[/bold green]")
-    rich.print(dataclasses.asdict(workspace))
+    rich.print(workspace.model_dump())
     rich.print("\n[bold green]Task Config (with overrides):[/bold green]")
-    rich.print(dataclasses.asdict(task_cfg))
+    rich.print(task_cfg.model_dump())
 
 
 @app.command()
-def config_key(
+def config_val(
     key: Annotated[
         str,
         Parameter(
@@ -202,11 +200,19 @@ def config_key(
     """
     scicd.config.intercept_cli_overrides(overrides)
 
-    workspace_dict = dataclasses.asdict(scicd.config.get_workspace())
-    task_dict = dataclasses.asdict(scicd.config.get_task_config())
+    workspace_dict = scicd.config.get_workspace().model_dump()
+    task_dict = scicd.config.get_task_config().model_dump()
 
     # Create a unified dictionary for querying (flat structure matching scicd.yaml)
     data = {"workspace": workspace_dict, **task_dict}
+
+    # Intercept specific computed pseudo-keys
+    if key == "remote.get_root":
+        print(scicd.config.get_task_config().remote.get_root())
+        return
+    if key == "remote.get_url":
+        print(scicd.config.get_task_config().remote.get_url())
+        return
 
     # Traverse the dictionary using the dot-separated key
     try:
@@ -240,7 +246,7 @@ def config_task(
     """
     scicd.config.intercept_cli_overrides(overrides)
     result = scicd.config.get_task_config()
-    rich.print(dataclasses.asdict(result))
+    rich.print(result.model_dump())
 
 
 @app.command()
@@ -249,7 +255,7 @@ def config_workspace():
     Inspects the resolved workspace configuration.
     """
     result = scicd.config.get_workspace()
-    rich.print(result)
+    rich.print(result.model_dump())
 
 
 if __name__ == "__main__":

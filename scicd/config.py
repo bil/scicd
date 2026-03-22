@@ -2,48 +2,42 @@
 Module docstring.
 """
 
+from __future__ import annotations
 import re
 import os
 
 from pathlib import Path
-from typing import Optional, List, Dict, Any, Union, Literal, Tuple
+from typing import Optional, Any, Union, Literal, Tuple, ClassVar
 from types import SimpleNamespace
-from dataclasses import dataclass, field, fields, asdict
-import dataclasses
+
 import rich
+from pydantic import (
+    BaseModel,
+    Field,
+    ConfigDict,
+    model_validator,
+    field_validator,
+    computed_field,
+)
 
 from scicd.yamler import deep_update, load_yaml, nest_dict
 
+class UserConfig(BaseModel):
+    """Extensible user-defined configuration namespace."""
 
-@dataclass
-class ConcurrencyConfig:
-    """
-    Configuration for task concurrency strategy.
+    model_config = ConfigDict(extra="allow")
 
-    Defines how tasks are distributed across workers in the CI/CD pipeline.
-    """
+
+class ConcurrencyConfig(BaseModel):
+    """Configuration for task concurrency strategy."""
+
+    model_config = ConfigDict(extra="forbid")
 
     method: Literal["biject", "slice", "queue"] = "biject"
-    """
-    Concurrency method to employ.
-    - 'biject': Direct 1:1 mapping between tasks and jobs.
-    - 'slice': Distributes M tasks across N static worker jobs.
-    - 'queue': Workers pull tasks dynamically from a central queue.
-    """
-
     workers: Optional[int] = None
-    """
-    Number of concurrent workers to spawn.
-    Must be positive. Required for 'slice' and 'queue' methods.
-    """
 
-    def __post_init__(self):
-        valid_methods = ["biject", "slice", "queue"]
-        if self.method not in valid_methods:
-            raise ValueError(
-                f"method must be one of {valid_methods}, got '{self.method}'"
-            )
-
+    @model_validator(mode="after")
+    def check_workers(self) -> "ConcurrencyConfig":
         if self.method in ["slice", "queue"]:
             if self.workers is None:
                 raise ValueError(
@@ -53,520 +47,75 @@ class ConcurrencyConfig:
                 raise ValueError(
                     f"workers must be a positive integer, got {self.workers}"
                 )
+        return self
 
 
-@dataclass
-class QueueConfig:
-    """
-    Configuration for queue-based dynamic concurrency.
+class QueueConfig(BaseModel):
+    """Configuration for queue-based dynamic concurrency."""
 
-    Describes the backend message broker used to coordinate task execution
-    when using the 'queue' concurrency method.
-    """
+    model_config = ConfigDict(extra="allow")
 
     platform: Optional[Literal["gcp"]] = None
-    """
-    Message broker backend.
-    Currently supported: 'gcp' (Pub/Sub).
-    Planned support: 'aws' (SQS), 'redis'.
-    """
-
     topic: str = ""
-    """
-    Queue/Topic name for the message broker.
-    For GCP: The Pub/Sub topic ID.
-    """
-
     subscription: str = ""
-    """
-    Subscription or consumer group identifier.
-    For GCP: The Pub/Sub subscription ID.
-    """
+    config: dict[str, Any] = {}
 
-    config: Dict[str, Any] = field(default_factory=dict)
-    """
-    Extra platform-specific settings.
-    Example (GCP): {'project': 'gcp-project-id'}
-    """
-
-    def __post_init__(self):
-        if self.platform is None:
-            # Note: This is checked in TaskConfig if method='queue',
-            # but we can enforce it here too if not None.
-            pass
-        elif self.platform not in ["gcp"]:
-            raise ValueError(
-                f"Currently only 'gcp' platform is supported for queues, got '{self.platform}'"
-            )
-        else:
+    @model_validator(mode="after")
+    def check_queue(self) -> "QueueConfig":
+        if self.platform == "gcp":
             if not self.topic:
                 raise ValueError("queue.topic cannot be empty")
             if not self.subscription:
                 raise ValueError("queue.subscription cannot be empty")
+        return self
 
 
-@dataclass
-class RemoteConfig:
-    """
-    Configuration for remote data synchronization.
+class RemoteConfig(BaseModel):
+    """Configuration for remote data synchronization."""
 
-    SciCD uses this to automatically generate 'pull' and 'push' steps
-    within CI/CD jobs, ensuring data persistence across ephemeral workers.
-    """
+    model_config = ConfigDict(extra="forbid")
 
     root: Optional[str] = None
-    """
-    Local base directory for synchronization.
-    Only files within this directory will be synced to/from the remote.
-    """
-
     url: Optional[str] = None
-    """
-    Remote storage destination.
-    Format depends on protocol (e.g., 's3://my-bucket/path' or 'rclone-remote:path').
-    """
-
-    namespace: Optional[str] = None
-    """
-    An optional namespace used as a suffix on both root/url.
-    """
-
+    namespace: str = ""
     protocol: Literal["rclone", "https"] = "rclone"
-    """
-    Transfer protocol to use.
-    - 'rclone': High-performance sync for various backends (S3, GCS, SFTP).
-    - 'https': Direct download/upload via HTTP.
-    """
-
-    flags: List[str] = field(default_factory=list)
-    """
-    Additional CLI flags passed to the underlying sync tool (e.g., ['--transfers=16']).
-    """
-
+    flags: list[str] = []
     pull_inputs: bool = False
-    """
-    If True, SciCD generates a 'before_script' step to pull data from remote
-    before the task begins.
-    """
-
     push_outputs: bool = False
-    """
-    If True, SciCD generates an 'after_script' step to push local results
-    to remote storage upon task completion.
-    """
 
-    def __post_init__(self):
-        if self.root:
-            self.root = os.path.expandvars(self.root)
-            self.root = str(Path(self.root).resolve())
+    @model_validator(mode="before")
+    @classmethod
+    def expand_env_vars(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            for k in ["root", "url", "namespace"]:
+                if data.get(k):
+                    data[k] = os.path.expandvars(data[k])
+            if data.get("root"):
+                data["root"] = str(Path(data["root"]).resolve())
+        return data
 
-        if self.url:
-            self.url = os.path.expandvars(self.url)
-
-        if self.namespace:
-            self.namespace = os.path.expandvars(self.namespace)
-
-        valid_protocols = ["rclone", "https"]
-        if self.protocol not in valid_protocols:
-            raise ValueError(
-                f"protocol must be one of {valid_protocols}, got '{self.protocol}'"
-            )
-
+    @model_validator(mode="after")
+    def check_sync(self) -> "RemoteConfig":
         if self.pull_inputs or self.push_outputs:
-            if not self.url:
+            if not self.url or not self.root:
                 raise ValueError(
-                    "remote.url is mandatory when pull_inputs or push_outputs is enabled"
+                    "remote.url and remote.root are mandatory when syncing is enabled"
                 )
-            if not self.root:
-                raise ValueError(
-                    "remote.root is mandatory when pull_inputs or push_outputs is enabled"
-                )
+        return self
 
-    def get_root(self) -> str:
-        """Helper to get root with optional namespace suffix"""
+    @computed_field
+    @property
+    def total_root(self) -> Optional[str]:
         if self.root and self.namespace:
             return f"{self.root}/{self.namespace}"
         return self.root
 
-    def get_url(self) -> str:
-        """Helper to get url with optional namespace suffix"""
+    @computed_field
+    @property
+    def total_url(self) -> Optional[str]:
         if self.url and self.namespace:
             return f"{self.url}/{self.namespace}"
         return self.url
-
-
-@dataclass
-# pylint: disable=too-many-instance-attributes
-class TaskConfig:
-    """
-    Unified configuration for a single task within SciCD.
-
-    Aggregates resource requirements, runtime environment, and platform-specific
-    overrides. This is the source of truth for generating CI/CD job definitions.
-    """
-
-    # ===== Executor Selection =====
-    tags: List[str] = field(default_factory=list)
-    """
-    Targeted runner/executor tags.
-    All tags must be present on the CI/CD runner for this task to be scheduled.
-    """
-
-    # ===== Resources =====
-    cpu: int = 1
-    """
-    Number of CPU cores requested.
-    Must be a positive integer.
-    """
-
-    memory: str = "8Gi"
-    """
-    RAM allocation.
-    Supported units: K/Ki, M/Mi, G/Gi, T/Ti (with optional 'B' suffix).
-    Default: '8Gi'.
-    """
-
-    disk: Optional[str] = None
-    """
-    Ephemeral disk storage allocation.
-    Same unit support as 'memory'.
-    """
-
-    gpu: Optional[int] = None
-    """
-    Number of GPUs requested.
-    Must be positive if provided.
-    """
-
-    gpu_type: Optional[str] = None
-    """
-    Specific GPU architecture or model (e.g., 'a100', 't4').
-    Usage depends on CI/CD executor capability.
-    """
-
-    # ===== Scheduling/Placement =====
-    partition: Optional[str] = None
-    """
-    Queue or partition name (e.g., Slurm partitions, specialized runner groups).
-    """
-
-    # ===== Time Constraints =====
-    timeout: str = "60m"
-    """
-    Maximum allowed runtime for the task.
-    Supports GitLab format: '1h', '45m', '1h 30m'.
-    """
-
-    # ===== Reliability =====
-    retry: int = 0
-    """
-    Number of retry attempts on job failure.
-    Must be non-negative.
-    """
-
-    # ===== Container/Runtime =====
-    image: Optional[str] = None
-    """
-    Container image to use for this task.
-    """
-
-    python_cmd: str = "python3"
-    """
-    Python executable name or absolute path within the container/environment.
-    """
-
-    # ===== Environment Variables =====
-    variables: Dict[str, Union[str, int, float]] = field(default_factory=dict)
-    """
-    Standard environment variables to inject into the task environment.
-    """
-
-    # ===== Executor-Specific Variables =====
-    executor_config: Dict[str, Union[str, int, float]] = field(default_factory=dict)
-    """
-    Backend-specific variables passed directly to the executor (e.g., SLURM_* vars).
-    """
-
-    # ===== CI/CD Platform Config =====
-    cicd: Dict[str, Any] = field(default_factory=dict)
-    """
-    Direct passthrough to the CI/CD YAML configuration (e.g., 'interruptible: true').
-    """
-
-    # ===== Nested Configurations =====
-    concurrency: Union[ConcurrencyConfig, Dict[str, Union[str, int]]] = field(
-        default_factory=ConcurrencyConfig
-    )
-    """
-    Task-level concurrency strategy.
-    """
-
-    queue: Union[QueueConfig, Dict[str, Any], None] = field(default_factory=QueueConfig)
-    """
-    Messaging queue settings, only relevant if concurrency.method='queue'.
-    """
-
-    remote: Union[RemoteConfig, Dict[str, Any]] = field(default_factory=RemoteConfig)
-    """
-    Remote storage configuration (S3/GCP/HTTPS).
-    """
-
-    user: Union[Dict[str, Any], SimpleNamespace] = field(default_factory=dict)
-    """
-    Extensible user-defined configuration.
-    Recursively converted to a SimpleNamespace for convenient dot-notation access.
-    """
-
-    def __post_init__(self):
-        """
-        Validate resource constraints and auto-convert nested dictionaries.
-        """
-        if self.image:
-            self.image = os.path.expandvars(self.image)
-
-        if self.cpu <= 0:
-            raise ValueError(f"cpu must be positive, got {self.cpu}")
-
-        if self.retry < 0:
-            raise ValueError(f"retry cannot be negative, got {self.retry}")
-
-        if self.gpu is not None and self.gpu <= 0:
-            raise ValueError(f"gpu must be positive if specified, got {self.gpu}")
-
-        # Auto-convert concurrency dict to ConcurrencyConfig
-        if isinstance(self.concurrency, dict):
-            self.concurrency = ConcurrencyConfig(**self.concurrency)
-
-        # Auto-convert queue dict to QueueConfig
-        if isinstance(self.queue, dict):
-            self.queue = QueueConfig(**self.queue)
-
-        # Auto-convert remote dict to RemoteConfig
-        if isinstance(self.remote, dict):
-            self.remote = RemoteConfig(**self.remote)
-
-        # Convert user dict to namespace for dot-access
-        if isinstance(self.user, dict):
-            self.user = _dict_to_namespace(self.user)
-
-        # Validate that queue config exists if using queue concurrency
-        if self.concurrency.method == "queue":
-            if self.queue is None:
-                raise ValueError(
-                    "queue configuration is required when concurrency.method='queue'"
-                )
-            if (
-                self.queue.platform is None
-                or not self.queue.subscription
-                or not self.queue.topic
-            ):
-                raise ValueError(
-                    "Queue must be fully configured (platform, subscription, topic) "
-                    "when concurrency.method='queue'"
-                )
-
-        # Validate resource formats
-        try:
-            self.memory = self.validate_memory(self.memory)
-        except ValueError as e:
-            raise ValueError("Invalid memory format") from e
-
-        if self.disk:
-            try:
-                self.disk = self.validate_memory(self.disk)
-            except ValueError as e:
-                raise ValueError("Invalid disk format") from e
-
-        try:
-            self.timeout = self.validate_time(self.timeout)
-        except ValueError as e:
-            raise ValueError("Invalid timeout format") from e
-
-    @property
-    def memory_mb(self) -> int:
-        return self._parse_memory_to_mb(self.memory)
-
-    @property
-    def disk_mb(self) -> Optional[int]:
-        return self._parse_memory_to_mb(self.disk)
-
-    @property
-    def timeout_minutes(self) -> int:
-        return self._parse_time_to_minutes(self.timeout)
-
-    @classmethod
-    def _split_memory_str(cls, mem_str: str) -> Tuple[int, str]:
-        pattern = r"^(\d+)\s*([KMGT])(i)?$"
-        match = re.match(pattern, mem_str)
-        if not match:
-            raise ValueError(f"Could not match memory string: {mem_str}")
-
-        value = int(match.group(1))
-        unit = match.group(2)
-        if mem_str.endswith("i"):
-            unit += match.group(3)
-        return (value, unit)
-
-    @classmethod
-    def _split_time_str(cls, time_str: str) -> List[str]:
-        # Pattern: one or more "<number><unit>" groups
-        pattern = r"(\d+)\s*([hms])"
-        matches = re.findall(pattern, time_str.lower())
-        if not matches:
-            raise ValueError(f"Could not split time string {time_str}")
-
-        out_strs = ["".join(match) for match in matches]
-        return out_strs
-
-    @classmethod
-    def validate_time(cls, time: Union[int, str]) -> str:
-        """
-        Converts (or validates) argument as a Gitlab-style time string.
-
-        Takes time specified as integer minutes or as a string".
-        """
-        if isinstance(time, int):
-            return f"{time}m"
-        time = time.strip()
-
-        # Pattern: one or more "<number><unit>" groups
-        try:
-            time_list = cls._split_time_str(time)
-        except ValueError as e:
-            raise ValueError(
-                f"Invalid time format: '{time}'. "
-                "Expected format: '1h', '30m', '1h 30m', etc."
-            ) from e
-        time = " ".join(time_list)
-        return time
-
-    @classmethod
-    def validate_memory(cls, mem: Union[int, str]) -> str:
-        """Check if memory string has valid format."""
-        if isinstance(mem, int):
-            return f"{mem}Mi"
-        if mem is None:
-            return mem
-        mem = mem.strip()
-        valid_units = ["Ki", "Mi", "Gi", "Ti", "K", "M", "G", "T"]
-        valid = True
-        if mem.endswith(("B", "b")):  # take off final b
-            mem = mem[:-1]
-
-        # Ensure we have a valid suffix
-        if not any(mem.endswith(unit) for unit in valid_units):
-            valid = False
-
-        # Ensure we have an integer/string group
-        if valid:
-            try:
-                cls._split_memory_str(mem)
-            except ValueError:
-                valid = False
-
-        if valid:
-            return mem
-
-        raise ValueError(
-            f"{mem} cannot be properly formatted!",
-            "Expected format: <number><unit> (e.g., '16Gi', '32000Mi')",
-            "Valid units: [K/Ki, M/Mi, G/Gi, T/Ti]",
-        )
-
-    @classmethod
-    def _parse_memory_to_mb(cls, mem_str: Optional[str]) -> Optional[int]:
-        """
-        Parse memory string to megabytes.
-
-        Supports: K/Ki, M/Mi, G/Gi, T/Ti
-        Examples: '8Gi', '8192Mi', '8G', '8000M', '8GB', '8GiB'
-
-        Note: Treats binary (Ki/Mi/Gi/Ti) and decimal (K/M/G/T) as equivalent
-        for simplicity (ignores ~7% difference).
-        """
-        if mem_str is None:
-            return None
-        mem_str = mem_str.strip()
-
-        value, unit = cls._split_memory_str(mem_str)
-        # We let the decimal/binary conversion be imprecise
-        base_unit = unit.rstrip("i").upper()
-
-        # Convert to MB (treating binary and decimal as same)
-        multipliers = {
-            "K": 1 / 1024,  # KB to MB
-            "M": 1,  # MB to MB
-            "G": 1024,  # GB to MB
-            "T": 1024 * 1024,  # TB to MB
-        }
-
-        mb = value * multipliers[base_unit]
-        return int(mb)
-
-    @classmethod
-    def _parse_time_to_minutes(cls, time_str: str) -> int:
-        """
-        Parse time string to minutes.
-
-        Supports GitLab formats: '1h', '30m', '90s', '1h 30m', '1h 30m 10s'
-        """
-        time_str = time_str.strip()
-
-        # Pattern: one or more "<number><unit>" groups
-        pattern = r"(\d+)\s*([hms])"
-        matches = re.findall(pattern, time_str.lower())
-
-        if not matches:
-            raise ValueError(
-                f"Invalid time format: '{time_str}'. "
-                "Expected format: '1h', '30m', '1h 30m', etc."
-            )
-
-        total_minutes = 0
-        for value, unit in matches:
-            value = int(value)
-            if unit == "h":
-                total_minutes += value * 60
-            elif unit == "m":
-                total_minutes += value
-            elif unit == "s":
-                total_minutes += value // 60  # Round down to minutes
-
-        return total_minutes
-
-    def merge(self, overrides: Dict[str, Any]) -> "TaskConfig":
-        """
-        Create a new TaskConfig with overrides applied.
-
-        Handles nested merging for concurrency and queue configs.
-        Also handles type conversion for string values coming from the CLI.
-
-        Args:
-            overrides: Dictionary of fields to override
-
-        Returns:
-            New TaskConfig instance with merged values
-        """
-        current = asdict(self)
-        fields_map = {f.name: f.type for f in fields(self)}
-
-        # Cast strings from CLI to correct types in the overrides dict
-        casted_overrides = overrides.copy()
-        for k, v in casted_overrides.items():
-            if k in fields_map:
-                target_type = fields_map[k]
-                try:
-                    if target_type in [int, Optional[int]]:
-                        casted_overrides[k] = int(v)
-                    elif target_type in [float, Optional[float]]:
-                        casted_overrides[k] = float(v)
-                    elif target_type in [bool, Optional[bool]]:
-                        casted_overrides[k] = str(v).lower() in ("true", "1", "yes")
-                except (ValueError, TypeError):
-                    pass
-
-        out = deep_update(current, casted_overrides)
-        return TaskConfig(**out)
 
 
 def _dict_to_namespace(d: Any) -> Any:
@@ -578,44 +127,185 @@ def _dict_to_namespace(d: Any) -> Any:
     return d
 
 
-@dataclass
-class WorkspaceConfig:
-    """
-    Configuration for the source control and CI/CD platform.
+class TaskConfig(BaseModel):
+    """Unified configuration for a single task within SciCD."""
 
-    Contains the connection details and platform-specific settings
-    for generating and deploying the CI/CD pipeline.
-    """
+    model_config = ConfigDict(extra="forbid")
+
+    # Helpers for parsing/normalization
+    _MEM_REGEX: ClassVar[re.Pattern] = re.compile(
+        r"^(\d+)\s*([KMGT])(?:i|B|iB)?$", re.IGNORECASE
+    )
+    _TIME_REGEX: ClassVar[re.Pattern] = re.compile(r"(\d+)\s*([hms])", re.IGNORECASE)
+
+    tags: list[str] = []
+    cpu: int = Field(default=1, gt=0)
+    memory: str = "8Gi"
+    disk: Optional[str] = None
+    gpu: Optional[int] = Field(default=None, gt=0)
+    gpu_type: Optional[str] = None
+    partition: Optional[str] = None
+    timeout: str = "60m"
+    retry: int = Field(default=0, ge=0)
+    image: Optional[str] = None
+    python_cmd: str = "python3"
+
+    variables: dict[str, Union[str, int, float]] = {}
+    executor_config: dict[str, Union[str, int, float]] = {}
+    cicd: dict[str, Any] = {}
+
+    concurrency: ConcurrencyConfig = ConcurrencyConfig()
+    queue: QueueConfig = QueueConfig()
+    remote: RemoteConfig = RemoteConfig()
+    user: UserConfig = UserConfig()
+
+    @model_validator(mode="before")
+    @classmethod
+    def expand_image(cls, data: Any) -> Any:
+        if isinstance(data, dict) and data.get("image"):
+            data["image"] = os.path.expandvars(data["image"])
+        return data
+
+    @field_validator("memory", "disk", mode="before")
+    @classmethod
+    def validate_memory_str(cls, v: Any) -> Any:
+        if v is None:
+            return v
+        if isinstance(v, int):
+            return f"{v}Mi"
+
+        v_str = str(v).strip()
+        match = cls._MEM_REGEX.match(v_str)
+        if not match:
+            raise ValueError(
+                f"Invalid memory format '{v_str}'. Expected e.g. '8G', '512MiB'"
+            )
+
+        val = match.group(1)
+        unit = match.group(2).upper()
+        # Canonicalize units (8GB -> 8G, 8GiB -> 8Gi)
+        if "i" in v_str.lower():
+            unit += "i"
+        return f"{val}{unit}"
+
+    @field_validator("timeout", mode="before")
+    @classmethod
+    def validate_time_str(cls, v: Any) -> Any:
+        if isinstance(v, int):
+            return f"{v}m"
+
+        v_str = str(v).strip()
+        matches = cls._TIME_REGEX.findall(v_str)
+        if not matches:
+            raise ValueError(
+                f"Invalid timeout format '{v_str}'. Expected e.g. '1h 30m', '10s'"
+            )
+
+        # Canonical format: normalized space-separated lowercase segments
+        return " ".join([f"{val}{unit.lower()}" for val, unit in matches])
+
+    @model_validator(mode="after")
+    def check_queue(self) -> "TaskConfig":
+        if self.concurrency.method == "queue":
+            if (
+                self.queue.platform is None
+                or not self.queue.subscription
+                or not self.queue.topic
+            ):
+                raise ValueError("Queue must be fully configured when method='queue'")
+        return self
+
+    @property
+    def user_ns(self) -> SimpleNamespace:
+        return _dict_to_namespace(self.user.model_dump())
+
+    @property
+    def memory_mb(self) -> int:
+        return self._parse_memory_to_mb(self.memory)
+
+    @property
+    def disk_mb(self) -> Optional[int]:
+        if not self.disk:
+            return None
+        return self._parse_memory_to_mb(self.disk)
+
+    @property
+    def timeout_minutes(self) -> int:
+        return self._parse_time_to_minutes(self.timeout)
+
+    @classmethod
+    def _split_memory_str(cls, mem_str: str) -> Tuple[int, str]:
+        match = cls._MEM_REGEX.match(mem_str)
+        if not match:
+            raise ValueError(f"Could not match memory string: {mem_str}")
+
+        val = int(match.group(1))
+        unit = match.group(2).upper()
+        if "i" in mem_str.lower():
+            unit += "i"
+        return val, unit
+
+    @classmethod
+    def _split_time_str(cls, time_str: str) -> list[str]:
+        matches = cls._TIME_REGEX.findall(time_str)
+        if not matches:
+            raise ValueError(f"Could not split time string {time_str}")
+        return ["".join(m) for m in matches]
+
+    @classmethod
+    def _parse_memory_to_mb(cls, mem_str: Optional[str]) -> Optional[int]:
+        if mem_str is None:
+            return None
+        value, unit = cls._split_memory_str(mem_str)
+        base_unit = unit.removesuffix("i").upper()
+        multipliers = {"K": 1 / 1024, "M": 1, "G": 1024, "T": 1024 * 1024}
+        mb = value * multipliers[base_unit]
+        return int(mb)
+
+    @classmethod
+    def _parse_time_to_minutes(cls, time_str: str) -> int:
+        matches = cls._TIME_REGEX.findall(time_str)
+        if not matches:
+            raise ValueError(f"Invalid time format: '{time_str}'")
+        total_minutes = 0
+        for value, unit in matches:
+            value = int(value)
+            unit = unit.lower()
+            if unit == "h":
+                total_minutes += value * 60
+            elif unit == "m":
+                total_minutes += value
+            elif unit == "s":
+                total_minutes += value // 60
+        return total_minutes
+
+    def merge(self, overrides: dict[str, Any]) -> "TaskConfig":
+        current = self.model_dump(
+            exclude_unset=False, exclude={"remote": {"total_root", "total_url"}}
+        )
+        out = deep_update(current, overrides)
+        return TaskConfig.model_validate(out)
+
+
+class WorkspaceConfig(BaseModel):
+    """Configuration for the source control and CI/CD platform."""
+
+    model_config = ConfigDict(extra="forbid")
 
     platform: Literal["gitlab", "github"] = "gitlab"
-    """CI/CD platform targeted for pipeline generation."""
-
     url: str = ""
-    """
-    Base URL of the repository (e.g., 'https://gitlab.com').
-    """
-
     project: str = ""
-    """
-    Full project or repository path.
-    - GitLab: 'namespace/project-name'
-    - GitHub: 'owner/repo-name'
-    """
+    cicd: dict[str, Any] = {}
 
-    cicd: Dict[str, Any] = field(default_factory=dict)
-    """
-    Platform-specific top-level configuration keys.
-    Passed through directly to the root of the generated YAML.
-    """
-
-    def __post_init__(self):
-        valid_platforms = ["gitlab", "github"]
-        if self.platform not in valid_platforms:
-            raise ValueError(
-                f"platform must be one of {valid_platforms}, got '{self.platform}'"
-            )
-        self.url = os.path.expandvars(self.url)
-        self.project = os.path.expandvars(self.project)
+    @model_validator(mode="before")
+    @classmethod
+    def expand_vars(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if data.get("url"):
+                data["url"] = os.path.expandvars(data["url"])
+            if data.get("project"):
+                data["project"] = os.path.expandvars(data["project"])
+        return data
 
 
 # ================================== HELPERS =================================
@@ -666,7 +356,7 @@ def find_config_path() -> Path:
     )
 
 
-def load_config(config_path: Optional[Union[str, Path]] = None) -> Dict[str, Any]:
+def load_config(config_path: Optional[Union[str, Path]] = None) -> dict[str, Any]:
     """
     Load configuration from YAML file.
     If no path is provided, it uses discovery logic.
@@ -689,7 +379,7 @@ class _ConfigManager:
 
     _workspace: Optional[WorkspaceConfig] = None
     _base_task: Optional[TaskConfig] = None
-    _cli_overrides: Dict[str, Any] = {}
+    _cli_overrides: dict[str, Any] = {}
 
     @classmethod
     def _initialize(cls):
@@ -698,8 +388,8 @@ class _ConfigManager:
             ws_data = {}
             task_data = {}
 
-            ws_fields = {f"workspace.{f.name}" for f in fields(WorkspaceConfig)}
-            task_fields = {f.name for f in fields(TaskConfig)}
+            ws_fields = {f"workspace.{k}" for k in WorkspaceConfig.model_fields} # pylint: disable=not-an-iterable
+            task_fields = set(TaskConfig.model_fields.keys()) # pylint: disable=no-member
 
             for key, val in config_dict.items():
                 if key == "workspace":
@@ -734,12 +424,12 @@ class _ConfigManager:
         cls._base_task = task
 
     @classmethod
-    def set_cli_overrides(cls, overrides: Dict[str, Any]):
+    def set_cli_overrides(cls, overrides: dict[str, Any]):
         """Store global CLI overrides to be applied to all TaskConfigs."""
         cls._cli_overrides = overrides
 
     @classmethod
-    def get_cli_overrides(cls) -> Dict[str, Any]:
+    def get_cli_overrides(cls) -> dict[str, Any]:
         return cls._cli_overrides
 
     @classmethod
@@ -826,8 +516,8 @@ def reset_config():
 
 
 def cascading_config(
-    filepath: str | Path,
-    root_key: Optional[Union[str, List[str]]] = None,
+    filepath: Union[str, Path],
+    root_key: Optional[Union[str, list[str]]] = None,
     config_key: str = "config",
     override_key: str = "override",
     **kwargs,
@@ -888,7 +578,7 @@ def cascade(config: dict, override: list, **kwargs) -> dict:
     return out
 
 
-def intercept_cli_overrides(kwargs: Dict[str, Any]) -> Dict[str, Any]:
+def intercept_cli_overrides(kwargs: dict[str, Any]) -> dict[str, Any]:
     """
     Parses arbitrary CLI **kwargs. Keys matching TaskConfig fields are intercepted
     and applied directly to the global base task configuration. The remaining keys
@@ -900,7 +590,7 @@ def intercept_cli_overrides(kwargs: Dict[str, Any]) -> Dict[str, Any]:
     task_overrides_flat = {}
     frontend_params = {}
 
-    valid_task_keys = {f.name for f in dataclasses.fields(TaskConfig)}
+    valid_task_keys = set(TaskConfig.model_fields.keys()) # pylint: disable=no-member
 
     for k, v in kwargs.items():
         # Normalize key to use underscores for comparison (Cyclopts provides dashes)

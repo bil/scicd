@@ -5,7 +5,7 @@ YAML and Jinja2 processing with Type Hints.
 import os
 import re
 import pathlib
-from typing import Any, Dict, List, TypeVar
+from typing import Any, Dict, List, TypeVar, Union
 from collections.abc import Mapping
 from copy import deepcopy
 
@@ -17,7 +17,7 @@ from jinja2 import Environment
 T = TypeVar("T")
 
 
-def yml_suffix(path: str | pathlib.Path) -> str:
+def yml_suffix(path: Union[str, pathlib.Path]) -> str:
     """
     Ensures a path has a valid YAML suffix by checking existence or appending default.
     """

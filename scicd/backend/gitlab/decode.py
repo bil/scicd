@@ -2,7 +2,6 @@ import json
 import shlex
 from copy import deepcopy
 from typing import Any, Dict, List
-from dataclasses import asdict
 from types import SimpleNamespace
 
 import yaml
@@ -88,7 +87,7 @@ def render_node_gitlab(node: BaseNode) -> List[Dict[str, Any]]:
                 return vars(o)
             return str(o)
 
-        cfg_json = json.dumps(asdict(cfg), default=_json_default)
+        cfg_json = json.dumps(cfg.model_dump(), default=_json_default)
 
         # Serialize platform-specific boilerplate
         g_info = gitlab_info(cfg)

@@ -277,9 +277,7 @@ def test_local_opts_disable_remote(mocker, tmp_path):
             "push_outputs": True,
         }
     )
-    mocker.patch(
-        "scicd.frontend.luigi.task.get_task_config", return_value=task_config
-    )
+    mocker.patch("scicd.frontend.luigi.task.get_task_config", return_value=task_config)
     mocker.patch("scicd.frontend.luigi.task.get_git_commit", return_value="abc1234")
 
     mock_pull = mocker.patch("scicd.remote.pull")

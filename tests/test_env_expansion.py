@@ -22,8 +22,8 @@ def test_selective_expansion():
     rem = RemoteConfig(
         root="$HOME_PATH/data", url="s3://$TEST_VAR/bucket", namespace="a-namespace"
     )
-    assert rem.get_root().endswith("a-namespace")
-    assert rem.get_url().endswith("a-namespace")
+    assert rem.total_root.endswith("a-namespace")
+    assert rem.total_url.endswith("a-namespace")
 
     # TaskConfig expansion
     tc = TaskConfig(image="python:$TEST_VAR", variables={"MY_VAR": "$KEEP_ME"})

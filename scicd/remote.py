@@ -6,7 +6,7 @@ import os
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Annotated, List
+from typing import Annotated
 
 import requests
 import cyclopts
@@ -114,7 +114,7 @@ def pull_full() -> bool:
 
     if protocol == "rclone":
         flags = " ".join(task_config.remote.flags)
-        cmd = f"rclone copy {task_config.remote.get_url()} {task_config.remote.get_root()} {flags}"
+        cmd = f"rclone copy {task_config.remote.total_url} {task_config.remote.total_root} {flags}"
         subprocess.check_call(cmd, shell=True)
         return True
 
@@ -127,7 +127,7 @@ def pull_full() -> bool:
 def _https_batch(
     task_config: scicd.config.TaskConfig,
     wspace: scicd.config.WorkspaceConfig,
-    files: List[Path],
+    files: list[Path],
     direction="push",
 ) -> bool:
     """HTTPS implementation using requests Session for connection pooling."""
@@ -139,8 +139,8 @@ def _https_batch(
     ):
         return True
 
-    local_root = Path(task_config.remote.get_root())
-    base_url = task_config.remote.get_url().rstrip("/")
+    local_root = Path(task_config.remote.total_root)
+    base_url = task_config.remote.total_url.rstrip("/")
 
     # Use a session to reuse the TCP connection for multiple files
     with requests.Session() as session:
@@ -181,7 +181,7 @@ def _https_batch(
 
 
 def _rclone_batch(
-    task_config: scicd.config.TaskConfig, files: List[Path], direction="push"
+    task_config: scicd.config.TaskConfig, files: list[Path], direction="push"
 ) -> bool:
     if (
         not task_config.remote
@@ -192,8 +192,8 @@ def _rclone_batch(
         return True
 
     flags = " ".join(task_config.remote.flags)
-    local_root = Path(task_config.remote.get_root())
-    remote_root = task_config.remote.get_url()
+    local_root = Path(task_config.remote.total_root)
+    remote_root = task_config.remote.total_url
 
     rel_paths = []
     for f in files:
