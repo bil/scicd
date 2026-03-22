@@ -170,9 +170,10 @@ def config(
     Inspects the global and task-level configuration.
     Prints the loaded config state.
     """
+    scicd.config.intercept_cli_overrides(overrides)
 
     workspace = scicd.config.get_workspace()
-    task_cfg = scicd.config.get_task_config(**overrides)
+    task_cfg = scicd.config.get_task_config()
 
     rich.print("[bold green]Workspace Config:[/bold green]")
     rich.print(dataclasses.asdict(workspace))
@@ -185,7 +186,7 @@ def config_key(
     key: Annotated[
         str,
         Parameter(
-            help="The dot-notated key to retrieve from workspace or task config (e.g. task.cpu)"
+            help="The dot-notated key to retrieve from config (e.g. workspace.url, remote.pull_inputs, cpu)"
         ),
     ],
     **overrides: Annotated[
@@ -199,12 +200,13 @@ def config_key(
     Extracts a specific value from the configuration using a key path.
     Useful for shell scripts and CI/CD variables.
     """
+    scicd.config.intercept_cli_overrides(overrides)
 
     workspace_dict = dataclasses.asdict(scicd.config.get_workspace())
-    task_dict = dataclasses.asdict(scicd.config.get_task_config(**overrides))
+    task_dict = dataclasses.asdict(scicd.config.get_task_config())
 
-    # Create a unified dictionary for querying
-    data = {"workspace": workspace_dict, "task": task_dict}
+    # Create a unified dictionary for querying (flat structure matching scicd.yaml)
+    data = {"workspace": workspace_dict, **task_dict}
 
     # Traverse the dictionary using the dot-separated key
     try:
@@ -220,7 +222,8 @@ def config_key(
 
     except (KeyError, TypeError) as e:
         rich.print(
-            f"[bold red]Error:[/bold red] Key '{key}' not found in configuration. Start with 'workspace.' or 'task.'."
+            f"[bold red]Error:[/bold red] Key '{key}' not found in configuration. "
+            "Top-level namespaces include: workspace, remote, concurrency, queue, cpu, etc."
         )
         raise SystemExit(1) from e
 
@@ -235,8 +238,8 @@ def config_task(
     """
     Inspects the resolved task configuration.
     """
-
-    result = scicd.config.get_task_config(**overrides)
+    scicd.config.intercept_cli_overrides(overrides)
+    result = scicd.config.get_task_config()
     rich.print(dataclasses.asdict(result))
 
 
