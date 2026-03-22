@@ -19,6 +19,7 @@ import scicd.frontend.luigi.run
 import scicd.backend.run
 import scicd.config
 from scicd.frontend.luigi.encode import load_luigi_task
+from scicd.git import get_branch
 
 # App initialization with clear metadata
 app = App(
@@ -144,7 +145,9 @@ def lint_cicd(
 
 @app.command()
 def run_pipeline(
-    branch: Annotated[str, Parameter(help="The branch to trigger on.")] = "main",
+    branch: Annotated[
+        Optional[str], Parameter(help="The branch to trigger on.")
+    ] = None,
     backend: Annotated[
         Optional[str], Parameter(help="Backend platform (e.g., gitlab).")
     ] = None,
@@ -167,6 +170,9 @@ def run_pipeline(
     """
     if backend is None:
         backend = scicd.config.get_workspace().platform
+
+    if branch is None:
+        branch = get_branch() or "main"
 
     scicd.backend.run.run_pipeline(
         backend=backend, branch=branch, url=url, project=project, **variables

@@ -45,6 +45,7 @@ task:
 ### Data Normalization
 
 SciCD automatically normalizes specific string formats:
+
 - **Memory/Disk:** '8GB', '8GiB', and '8G' are all stored as '8G'. Integers are assumed to be megabytes (MiB).
 - **Time/Timeout:** '1h30m' is stored as '1h 30m'. Integers are assumed to be minutes.
 
@@ -59,23 +60,34 @@ SciCD resolves task configurations using a strict precedence order:
 
 ## Environment Variable Interpolation
 
-### Build-Time (Jinja2)
+SciCD provides multiple ways to interpolate environment variables into your configuration.
 
-Configuration files are rendered as Jinja2 templates. Access local environment variables via the `env` object:
+### Build-Time Expansion (`$VAR`)
+
+By default, any string containing `$VAR` or `${VAR}` in your configuration files will be expanded at build-time (when you run `scicd build` or `scicd local`). This is useful for anchoring paths to your local environment.
 
 ```yaml
-workspace:
-  project: "org/my-repo-{{ env.USER }}"
+user:
+  data_path: "$HOME/my_data"
 ```
 
-### Run-Time (Native CI)
+### Run-Time Escaping (`$$VAR`)
 
-For values evaluated by the CI/CD runner, use standard shell variable syntax. These are passed into the generated YAML literally.
+If you want a variable to be passed through literally to the generated CI/CD YAML (to be evaluated by the GitLab/GitHub runner), use the `$$` escape sequence.
 
 ```yaml
 task:
   variables:
-    MY_RUNTIME_VAR: "$CI_JOB_ID"
+    JOB_ID: "$$CI_JOB_ID"  # Becomes "$CI_JOB_ID" in the generated YAML
+```
+
+### Jinja2 Templating
+
+In addition to standard expansion, all configuration files are rendered as Jinja2 templates before parsing. This allows for complex logic, includes, and explicit environment access via the `env` object:
+
+```yaml
+workspace:
+  project: "org/my-repo-{{ env.USER }}"
 ```
 
 ## Cascading Configuration
