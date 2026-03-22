@@ -177,7 +177,7 @@ class TaskConfig(BaseModel):
     _MEM_REGEX: ClassVar[re.Pattern] = re.compile(
         r"^(\d+)\s*([KMGT])(?:i|B|iB)?$", re.IGNORECASE
     )
-    _TIME_REGEX: ClassVar[re.Pattern] = re.compile(r"(\d+)\s*([hms])", re.IGNORECASE)
+    _TIME_REGEX: ClassVar[re.Pattern] = re.compile(r"(\d+)\s*([dhms])", re.IGNORECASE)
 
     tags: list[str] = []
     cpu: int = Field(default=1, gt=0)
