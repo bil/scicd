@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from typing import Any, Dict, Type, TypeVar, cast
 
 import luigi
+import rich
 
 import scicd.config
 import scicd.remote
@@ -223,11 +224,23 @@ def augment_task(
                         )
                     files_to_pull.extend(fp_files)
                 if files_to_pull:
+                    rich.print(f"[bold blue]SciCD:[/bold blue] Task [cyan]{self.task_id}[/cyan] outputs missing locally. Attempting to pull from remote...")
+                    for f in files_to_pull:
+                        rich.print(f"  -> [dim]{f}[/dim]")
                     if scicd.remote.pull(*files_to_pull):
                         # Re-verify everything after the pull
                         if self.hashed:
-                            return self._check_fingerprints()
-                        return super().complete()
+                            if self._check_fingerprints():
+                                rich.print(f"[bold green]SciCD:[/bold green] Successfully pulled and verified outputs for [cyan]{self.task_id}[/cyan].")
+                                return True
+                            else:
+                                rich.print(f"[bold yellow]SciCD:[/bold yellow] Pulled outputs for [cyan]{self.task_id}[/cyan], but fingerprints do not match current code/config state.")
+                                return False
+                        
+                        is_complete_now = super().complete()
+                        if is_complete_now:
+                            rich.print(f"[bold green]SciCD:[/bold green] Successfully pulled outputs for [cyan]{self.task_id}[/cyan].")
+                        return is_complete_now
 
             return False
 
@@ -238,6 +251,7 @@ def augment_task(
     @Task.event_handler(luigi.Event.START)
     def _scicd_on_start(task):
         """Prepare environment before task runs."""
+        rich.print(f"[bold blue]SciCD:[/bold blue] Starting execution for [cyan]{task.task_id}[/cyan]")
         # Ensure output directories exist
         for target in luigi.task.flatten(task.output()):
             if hasattr(target, "path"):
@@ -246,13 +260,13 @@ def augment_task(
     @Task.event_handler(luigi.Event.SUCCESS)
     def _scicd_on_success(task):
         """Handle checkpointing and remote pushing."""
+        rich.print(f"[bold green]SciCD:[/bold green] Task [cyan]{task.task_id}[/cyan] completed successfully.")
         if task.hashed:
             current_fp = task.get_fingerprint()
             for ot in luigi.task.flatten(task.output()):
                 if hasattr(ot, "path"):
                     p = Path(ot.path)
                     fp_dir = p.parent / ".luigi_fingerprints"
-                    print(fp_dir / f"{p.name}.fingerprint")
                     fp_dir.mkdir(parents=True, exist_ok=True)
                     (fp_dir / f"{p.name}.fingerprint").write_text(
                         current_fp, encoding="utf-8"
@@ -276,6 +290,9 @@ def augment_task(
                         files_to_push.append(fp_file)
 
             if files_to_push:
+                rich.print(f"[bold blue]SciCD:[/bold blue] Pushing {len(files_to_push)} items to remote for [cyan]{task.task_id}[/cyan]...")
+                for f in files_to_push:
+                    rich.print(f"  -> [dim]{f}[/dim]")
                 scicd.remote.push(*files_to_push)
 
     # Preserve metadata

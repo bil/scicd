@@ -60,8 +60,10 @@ def local(
     **kwargs: Annotated[str, Parameter(help="Dynamic overrides", group="Overrides")],
 ):
     """Run a task locally for development."""
+    frontend_params = scicd.config.intercept_cli_overrides(kwargs)
+    
     if frontend == "luigi":
-        task = load_luigi_task(module, target, **kwargs)
+        task = load_luigi_task(module, target, **frontend_params)
         luigi.build([task], local_scheduler=True)
     else:
         raise ValueError(f"Unsupported frontend: {frontend}")

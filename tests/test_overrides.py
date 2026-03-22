@@ -76,11 +76,11 @@ def test_build_namespaced_parsing(mocker, tmp_path):
     )
 
     # Check task overrides were applied to ConfigManager
-    base_task = _ConfigManager.get_base_task()
-    assert base_task.cpu == 4
-    assert base_task.image == "alpine"
-    assert base_task.remote.pull_inputs is True
-    assert base_task.remote.flags == "['--test']"
+    cli_overrides = _ConfigManager.get_cli_overrides()
+    assert cli_overrides["cpu"] == 4
+    assert cli_overrides["image"] == "alpine"
+    assert cli_overrides["remote"]["pull_inputs"] is True
+    assert cli_overrides["remote"]["flags"] == "['--test']"
 
     # Check native params were passed to the frontend
     # TaskA-date and global-param should be passed through

@@ -15,22 +15,28 @@ This feature is "transparent" and applies to any task inheriting from `luigi.Tas
 
 ## Utility: `SciTask`
 
-While you can use standard tasks, SciCD provides the `SciTask` utility to solve common scientific computing challenges: standardized pathing and content-based completion.
+While you can use standard tasks, SciCD provides an augmented task factory in `scicd.frontend.luigi.task` that solves common scientific computing challenges: standardized pathing, remote pulling/pushing, and content-based completion.
 
-### 1. Hash-Based Completion
+The module exports three pre-configured classes:
 
-Standard Luigi tasks are considered "complete" if their output file exists. `SciTask` augments this by checking a **fingerprint**. A task is only complete if the output exists *and* the fingerprint matches the current:
+1. **`AutoTask`**: Remote syncing enabled. No fingerprinting.
+2. **`SciTask`**: Remote syncing + config/param fingerprinting.
+3. **`DevTask`**: Remote syncing + config/param fingerprinting + Git commit hash fingerprinting.
 
-- **Code Version** (Git commit hash)
+### 1. Hash-Based Completion (`SciTask` & `DevTask`)
+
+Standard Luigi tasks are considered "complete" if their output file exists. The hashed variants augment this by checking a **fingerprint**. A task is only complete if the output exists *and* its `.luigi_fingerprints/` hash matches the current:
+
 - **Task Parameters**
 - **Cascading Configuration** (Insignificant parameters from YAML)
+- **Code Version** (Git commit hash - `DevTask` only)
 
 ### 2. Standardized Pathing
 
-`SciTask` provides an `output_path` helper that automatically anchors your task's data within the workspace's remote root.
+These classes provide an `output_path` helper that automatically anchors your task's data within the workspace's remote root.
 
 ```python
-from scicd.task import SciTask
+from scicd.frontend.luigi.task import SciTask
 import luigi
 
 class ProcessData(SciTask):
@@ -84,11 +90,12 @@ pipelines:
 
 When `path_cascade` is defined, `SciTask` will automatically look for its configuration within that file, namespaced by its class name (and optionally prefixed by `cascade_root`).
 
-## Summary: Standard vs. SciTask
+## Summary: Standard vs. SciCD Tasks
 
-| Feature | `luigi.Task` | `SciTask` |
-| :--- | :---: | :---: |
-| **Remote Syncing** | ✅ (Global) | ✅ (Global) |
-| **File-based Completion** | ✅ | ✅ |
-| **Content-based Fingerprinting** | ❌ | ✅ |
-| **Workspace-anchored Pathing** | ❌ | ✅ |
+| Feature | `luigi.Task` | `AutoTask` | `SciTask` | `DevTask` |
+| :--- | :---: | :---: | :---: | :---: |
+| **Remote Syncing** | ✅ (Global) | ✅ | ✅ | ✅ |
+| **File-based Completion** | ✅ | ✅ | ✅ | ✅ |
+| **Workspace-anchored Pathing** | ❌ | ✅ | ✅ | ✅ |
+| **Code Config Fingerprinting** | ❌ | ❌ | ✅ | ✅ |
+| **Git Commit Fingerprinting** | ❌ | ❌ | ❌ | ✅ |

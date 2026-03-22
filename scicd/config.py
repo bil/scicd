@@ -9,8 +9,10 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any, Union, Literal, Tuple
 from types import SimpleNamespace
 from dataclasses import dataclass, field, fields, asdict
+import dataclasses
+import rich
 
-from scicd.yamler import deep_update, load_yaml
+from scicd.yamler import deep_update, load_yaml, nest_dict
 
 
 @dataclass
@@ -180,13 +182,13 @@ class RemoteConfig:
                     "remote.root is mandatory when pull_inputs or push_outputs is enabled"
                 )
 
-    def get_root(self):
+    def get_root(self) -> str:
         """Helper to get root with optional namespace suffix"""
         if self.root and self.namespace:
             return f"{self.root}/{self.namespace}"
         return self.root
 
-    def get_url(self):
+    def get_url(self) -> str:
         """Helper to get url with optional namespace suffix"""
         if self.url and self.namespace:
             return f"{self.url}/{self.namespace}"
@@ -687,6 +689,7 @@ class _ConfigManager:
 
     _workspace: Optional[WorkspaceConfig] = None
     _base_task: Optional[TaskConfig] = None
+    _cli_overrides: Dict[str, Any] = {}
 
     @classmethod
     def _initialize(cls):
@@ -731,10 +734,20 @@ class _ConfigManager:
         cls._base_task = task
 
     @classmethod
+    def set_cli_overrides(cls, overrides: Dict[str, Any]):
+        """Store global CLI overrides to be applied to all TaskConfigs."""
+        cls._cli_overrides = overrides
+
+    @classmethod
+    def get_cli_overrides(cls) -> Dict[str, Any]:
+        return cls._cli_overrides
+
+    @classmethod
     def reset(cls):
         """Reset all cached config (for testing)."""
         cls._workspace = None
         cls._base_task = None
+        cls._cli_overrides = {}
 
 
 def get_workspace() -> WorkspaceConfig:
@@ -779,7 +792,8 @@ def get_task_config(**overrides) -> TaskConfig:
     Get TaskConfig with optional runtime overrides.
 
     Starts with base defaults from WorkspaceConfig,
-    then applies any overrides using the merge() method.
+    then applies any overrides using the merge() method,
+    and finally applies CLI-level overrides (highest priority).
 
     Args:
         **overrides: Runtime overrides (cpu=16, memory='64Gi', tags=['gpu'], etc.)
@@ -790,9 +804,14 @@ def get_task_config(**overrides) -> TaskConfig:
     # Start with cached base defaults from workspace
     task_config = get_base_task()
 
-    # Apply overrides if provided
+    # Apply Task-level overrides if provided
     if overrides:
-        return task_config.merge(overrides)
+        task_config = task_config.merge(overrides)
+
+    # Finally apply CLI overrides (highest priority)
+    cli_overrides = _ConfigManager.get_cli_overrides()
+    if cli_overrides:
+        task_config = task_config.merge(cli_overrides)
 
     return task_config
 
@@ -867,3 +886,50 @@ def cascade(config: dict, override: list, **kwargs) -> dict:
         if all(re.match(str(v), str(kwargs.get(k))) for k, v in spec.items()):
             out = deep_update(out, kws.get("config", {}))
     return out
+
+
+def intercept_cli_overrides(kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Parses arbitrary CLI **kwargs. Keys matching TaskConfig fields are intercepted
+    and applied directly to the global base task configuration. The remaining keys
+    are returned as frontend-specific parameters.
+
+    Returns:
+        A dictionary containing only the frontend-specific parameters.
+    """
+    task_overrides_flat = {}
+    frontend_params = {}
+
+    valid_task_keys = {f.name for f in dataclasses.fields(TaskConfig)}
+
+    for k, v in kwargs.items():
+        # Normalize key to use underscores for comparison (Cyclopts provides dashes)
+        norm_k = k.replace("-", "_")
+        root_key = norm_k.split(".")[0]
+
+        if root_key in valid_task_keys:
+            # Simple type casting for CLI values
+            if isinstance(v, str):
+                vl = v.lower()
+                if vl in ("true", "yes", "1"):
+                    v = True
+                elif vl in ("false", "no", "0"):
+                    v = False
+                elif vl.isdigit():
+                    v = int(v)
+
+            task_overrides_flat[norm_k] = v
+        else:
+            frontend_params[k] = v
+
+    # Nest the overrides
+    task_overrides = nest_dict(task_overrides_flat)
+
+    # Apply runtime defaults
+    if task_overrides:
+        rich.print(
+            f"[bold blue]SciCD:[/bold blue] Storing global CLI overrides: {task_overrides}"
+        )
+        _ConfigManager.set_cli_overrides(task_overrides)
+
+    return frontend_params
