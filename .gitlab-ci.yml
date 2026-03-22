@@ -9,13 +9,13 @@ workflow:
 stages:
 - stage_0
 - stage_1
-CiPipeline:
+Pipeline:
   tags:
   - bilkube
   timeout: 60m
   stage: stage_1
   script:
-  - scicd run --module utils.ci_tasks --target CiPipeline --frontend luigi
+  - scicd run --module utils.ci_tasks --target Pipeline --frontend luigi
   variables:
     SCICD_PARAMS: '{}'
   needs:

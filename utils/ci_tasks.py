@@ -29,7 +29,7 @@ class RunTests(SciTask):
         print("SciCD CI: Pytest suite completed successfully.")
 
 
-class CiPipeline(luigi.WrapperTask):
+class Pipeline(luigi.WrapperTask):
     """Entry point to trigger tests across all supported Python versions."""
 
     def requires(self):
