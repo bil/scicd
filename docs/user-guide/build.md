@@ -60,7 +60,7 @@ To convert your Python workflow into a GitLab pipeline, follow these steps:
 3. **Run the Build**:
 
     ```bash
-    scicd build --module my_workflow --family RootTask
+    scicd build --module my_workflow --target RootTask
     ```
 
 4. **Review the YAML**: Open the generated `.gitlab-ci.yml` to verify that stages and jobs are mapped as expected.
@@ -79,7 +79,7 @@ Once pushed, GitLab will detect the `.gitlab-ci.yml` and start executing the job
 Before deploying, you can visualize the execution plan by exporting it to Graphviz DOT format:
 
 ```bash
-scicd build --module my_workflow --family RootTask --backend dot --filepath dag.dot
+scicd build --module my_workflow --target RootTask --backend dot --filepath dag.dot
 ```
 
 You can then render this using `dot`:

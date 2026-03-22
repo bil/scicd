@@ -16,7 +16,7 @@ app = App(help="Slicing and child-pipeline generation utilities.")
 
 
 def generate_child_pipeline_config(
-    family: str,
+    target: str,
     manifest_path: str,
     cfg: TaskConfig,
     wspace: WorkspaceConfig,
@@ -48,13 +48,13 @@ def generate_child_pipeline_config(
         }
     ]
 
-    pipeline_config[f"{family}_worker"] = worker_job
+    pipeline_config[f"{target}_worker"] = worker_job
     return pipeline_config
 
 
 @app.command()
 def generate(
-    family: Annotated[str, Parameter(help="The task family name.")],
+    target: Annotated[str, Parameter(help="The task class name (target).")],
     commands_json: Annotated[
         str, Parameter(help="JSON list of all task commands (List[List[str]]).")
     ],
@@ -84,7 +84,7 @@ def generate(
         yaml.dump(manifest_data, f, default_flow_style=False)
 
     pipeline_config = generate_child_pipeline_config(
-        family=family,
+        target=target,
         manifest_path="manifest.yml",
         cfg=cfg,
         wspace=wspace,

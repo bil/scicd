@@ -59,7 +59,7 @@ Add the following to your `user` section:
 ```yaml
 # scicd.yaml
 user:
-  cascade_path: "config/params.yml.j2" # Central file for all task parameters
+  path_cascade: "config/params.yml.j2" # Central file for all task parameters
 ```
 
 ### Centralized File Structure
@@ -82,7 +82,7 @@ pipelines:
         window: 10
 ```
 
-When `cascade_path` is defined, `SciTask` will automatically look for its configuration within that file, namespaced by its class name (and optionally prefixed by `cascade_root`).
+When `path_cascade` is defined, `SciTask` will automatically look for its configuration within that file, namespaced by its class name (and optionally prefixed by `cascade_root`).
 
 ## Summary: Standard vs. SciTask
 

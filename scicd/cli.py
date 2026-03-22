@@ -10,11 +10,13 @@ from typing import Annotated, Optional
 
 import rich
 from cyclopts import App, Parameter
+import luigi
 
 import scicd.build
 import scicd.frontend.luigi.run
 import scicd.backend.run
 import scicd.config
+from scicd.frontend.luigi.encode import load_luigi_task
 
 # App initialization with clear metadata
 app = App(
@@ -30,7 +32,7 @@ def run(
     module: Annotated[
         str, Parameter(help="The Python module containing the Task class.")
     ],
-    family: Annotated[str, Parameter(help="The task class name (family).")],
+    target: Annotated[str, Parameter(help="The task class name (target).")],
     params: Annotated[str, Parameter(help="JSON string of task parameters.")],
     frontend: Annotated[str, Parameter(help="Frontend framework to use.")] = "luigi",
 ):
@@ -41,7 +43,28 @@ def run(
     if frontend != "luigi":
         raise ValueError(f"Unsupported frontend: {frontend}")
 
-    scicd.frontend.luigi.run.run_task(module, family, params)
+    scicd.frontend.luigi.run.run_task(module, target, params)
+
+
+@app.command()
+def local(
+    module: Annotated[
+        str, Parameter(help="The Python module containing the target.", group="Required")
+    ],
+    target: Annotated[
+        str, Parameter(help="The target class.", group="Required")
+    ],
+    frontend: Annotated[
+        str, Parameter(help="Frontend to parse the DAG (e.g. luigi)")
+    ] = "luigi",
+    **kwargs: Annotated[str, Parameter(help="Dynamic overrides", group="Overrides")],
+):
+    """Run a task locally for development."""
+    if frontend == "luigi":
+        task = load_luigi_task(module, target, **kwargs)
+        luigi.build([task], local_scheduler=True)
+    else:
+        raise ValueError(f"Unsupported frontend: {frontend}")
 
 
 @app.command()
@@ -218,8 +241,7 @@ def config_task(
 @app.command()
 def config_workspace():
     """
-    Inspects the resolved configuration for a specific task family.
-    Prints the merged result of default, workspace, and family-level configs.
+    Inspects the resolved workspace configuration.
     """
     result = scicd.config.get_workspace()
     rich.print(result)

@@ -110,7 +110,7 @@ def test_slice_node_child_yml_generation():
     # Now test the generation logic itself from scicd.slice
 
     child_yml = generate_child_pipeline_config(
-        family="Task",
+        target="Task",
         manifest_path="manifest.yml",
         cfg=cfg,
         wspace=wspace,

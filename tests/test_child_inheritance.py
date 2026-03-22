@@ -69,7 +69,7 @@ def test_child_pipeline_inheritance():
     }
 
     child_yml = generate_child_pipeline_config(
-        family="MyTask",
+        target="MyTask",
         manifest_path="manifest.yml",
         cfg=cfg,
         wspace=workspace,

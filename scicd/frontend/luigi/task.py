@@ -150,17 +150,17 @@ def augment_task(
         def cfg_dict(self) -> Dict[str, Any]:
             """Raw dictionary of 'insignificant' parameters from YAML/TOML."""
             user_cfg = self.task_config.user
-            cascade_path = (
-                user_cfg.get("cascade_path")
+            path_cascade = (
+                user_cfg.get("path_cascade")
                 if isinstance(user_cfg, dict)
-                else getattr(user_cfg, "cascade_path", None)
+                else getattr(user_cfg, "path_cascade", None)
             )
 
-            if not cascade_path:
+            if not path_cascade:
                 return {}
 
             return scicd.config.cascading_config(
-                cascade_path, root_key=[self.get_task_family()], **self.param_kwargs
+                path_cascade, root_key=[self.get_task_family()], **self.param_kwargs
             )
 
         @cached_property

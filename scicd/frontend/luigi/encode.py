@@ -103,7 +103,7 @@ class LuigiAdapter(BaseAdapter):
         Example:
             ['scicd', 'run',
              '--module', 'workflow',
-             '--family', 'MyTask',
+             '--target', 'MyTask',
              '--params', '{"date": "2024-01-01"}',
              '--frontend', 'luigi']
         """
@@ -113,7 +113,7 @@ class LuigiAdapter(BaseAdapter):
             "run",
             "--module",
             self.work.__class__.__module__,
-            "--family",
+            "--target",
             self.name,
             "--params",
             json.dumps(self.params),

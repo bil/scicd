@@ -38,7 +38,7 @@ def test_task_properties(mocker, tmp_path):
 
     task_config = TaskConfig(
         remote={"url": "a-wonderful-splendid-url", "root": str(tmp_path / "root")},
-        user={"cascade_path": "an-arbitrary-path"},
+        user={"path_cascade": "an-arbitrary-path"},
     )
     mocker.patch("scicd.frontend.luigi.task.get_task_config", return_value=task_config)
 
@@ -67,7 +67,7 @@ def test_task_complete(mocker, tmp_path):
             "root": str(tmp_path / "root"),
             "pull_inputs": False,
         },
-        user={"cascade_path": "i-could-write-anything"},
+        user={"path_cascade": "i-could-write-anything"},
     )
 
     mocker.patch("scicd.frontend.luigi.task.get_task_config", return_value=task_config)
@@ -149,9 +149,9 @@ MyMockTask:
     )
 
     # Mock task_config to point to this file and define the hierarchy
-    task_config = TaskConfig(user={"cascade_path": str(cascade_file)})
+    task_config = TaskConfig(user={"path_cascade": str(cascade_file)})
     # mock_task_config = mocker.MagicMock()
-    # mock_task_config.user.cascade_path = str(cascade_file)
+    # mock_task_config.user.path_cascade = str(cascade_file)
     mocker.patch("scicd.frontend.luigi.task.get_task_config", return_value=task_config)
     mocker.patch("scicd.frontend.luigi.task.get_git_commit", return_value="abc")
 

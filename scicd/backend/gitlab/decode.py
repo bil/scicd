@@ -105,7 +105,7 @@ def render_node_gitlab(node: BaseNode) -> List[Dict[str, Any]]:
             "-m",
             "scicd.slice",
             "generate",
-            "--family",
+            "--target",
             node.name,
             "--commands-json",
             commands_json,

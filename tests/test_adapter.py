@@ -61,7 +61,7 @@ def test_luigi_adapter_command():
     assert cmd[0] == "scicd"
     assert cmd[1] == "run"
     assert "--module" in cmd
-    assert "--family" in cmd
+    assert "--target" in cmd
     assert "DummyTask" in cmd
     assert "--frontend" in cmd
     assert "luigi" in cmd
