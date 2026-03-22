@@ -2,7 +2,7 @@
 Configuration management system for SciCD.
 
 This module provides Pydantic-based configuration models for workspaces and tasks,
-along with singleton managers for global configuration state and CLI override 
+along with singleton managers for global configuration state and CLI override
 interception.
 """
 
@@ -45,6 +45,14 @@ class DynamicModel(BaseModel):
                 for k, v in data.items()
             }
         return data
+
+    def keys(self):
+        """Enable dictionary-like unpacking."""
+        return list(self.model_extra.keys() if self.model_extra else [])
+
+    def __getitem__(self, key):
+        """Enable dictionary-like access."""
+        return getattr(self, key)
 
 
 class UserConfig(DynamicModel):
@@ -304,7 +312,7 @@ class TaskConfig(BaseModel):
             raise ValueError(f"Could not match memory string: {mem_str}")
         value = int(match.group(1))
         unit = match.group(2).upper()
-        
+
         base_unit = unit.removesuffix("i").upper()
         multipliers = {"K": 1 / 1024, "M": 1, "G": 1024, "T": 1024 * 1024}
         mb = value * multipliers[base_unit]
@@ -443,8 +451,12 @@ class _ConfigManager:
             ws_data = {}
             task_data = {}
 
-            ws_fields = {f"workspace.{k}" for k in WorkspaceConfig.model_fields} # pylint: disable=not-an-iterable
-            task_fields = set(TaskConfig.model_fields.keys()) # pylint: disable=no-member
+            ws_fields = {
+                f"workspace.{k}" for k in WorkspaceConfig.model_fields
+            }  # pylint: disable=not-an-iterable
+            task_fields = set(
+                TaskConfig.model_fields.keys()
+            )  # pylint: disable=no-member
 
             for key, val in config_dict.items():
                 if key == "workspace":
@@ -592,7 +604,7 @@ def intercept_cli_overrides(kwargs: dict[str, Any]) -> dict[str, Any]:
     task_overrides_flat = {}
     frontend_params = {}
 
-    valid_task_keys = set(TaskConfig.model_fields.keys()) # pylint: disable=no-member
+    valid_task_keys = set(TaskConfig.model_fields.keys())  # pylint: disable=no-member
 
     for k, v in kwargs.items():
         # Normalize key to use underscores for comparison (Cyclopts provides dashes)

@@ -74,7 +74,12 @@ def render_node_gitlab(node: BaseNode) -> list[dict[str, Any]]:
         commands_json = json.dumps(all_commands)
 
         cfg = node.work[0].cfg
-        cfg_json = cfg.model_dump_json(exclude_none=True)
+        cfg_json = cfg.model_dump_json(
+            exclude_unset=True,
+            exclude_none=True,
+            exclude_defaults=True,
+            exclude_computed_fields=True,
+        )
 
         g_info = gitlab_info(cfg)
         gitlab_info_json = json.dumps(g_info)
@@ -85,11 +90,13 @@ def render_node_gitlab(node: BaseNode) -> list[dict[str, Any]]:
         gen_job["stage"] = f"stage_{node.rank}"
 
         gen_vars = gen_job.get("variables", {})
-        gen_vars.update({
-            "SCICD_COMMANDS_JSON": commands_json,
-            "SCICD_CFG_JSON": cfg_json,
-            "SCICD_GITLAB_INFO_JSON": gitlab_info_json,
-        })
+        gen_vars.update(
+            {
+                "SCICD_COMMANDS_JSON": commands_json,
+                "SCICD_CFG_JSON": cfg_json,
+                "SCICD_GITLAB_INFO_JSON": gitlab_info_json,
+            }
+        )
         gen_job["variables"] = gen_vars
 
         gen_command = [
