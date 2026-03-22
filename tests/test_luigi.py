@@ -66,7 +66,7 @@ class RootTask(SciTask):
             f.write("done")
 
 
-def test_luigi_dag_resolution(mocker):
+def test_luigi_dag_resolution(mocker, tmp_path):
     """
     Verifies that a Luigi task tree is correctly converted into an abstract SciCD DAG.
 
@@ -82,7 +82,8 @@ def test_luigi_dag_resolution(mocker):
 
     # Mock the CmdlineParser context manager and its return value
     mock_cp = mocker.MagicMock()
-    mock_cp.get_task_obj.return_value = RootTask()
+    # Provide a real base_path to avoid MagicMock in file paths
+    mock_cp.get_task_obj.return_value = RootTask(base_path=str(tmp_path))
 
     # Patch the global_instance context manager
     mocker.patch(

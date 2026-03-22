@@ -269,12 +269,16 @@ def test_local_opts_disable_remote(mocker, tmp_path):
     """
 
     scicd.config.reset_config()
-    mock_task_config = mocker.MagicMock()
-    mock_task_config.remote.root = str(tmp_path)
-    mock_task_config.remote.pull_inputs = True
-    mock_task_config.remote.push_outputs = True
+    task_config = TaskConfig(
+        remote={
+            "url": "www.monkey-magic.com",
+            "root": str(tmp_path),
+            "pull_inputs": True,
+            "push_outputs": True,
+        }
+    )
     mocker.patch(
-        "scicd.frontend.luigi.task.get_task_config", return_value=mock_task_config
+        "scicd.frontend.luigi.task.get_task_config", return_value=task_config
     )
     mocker.patch("scicd.frontend.luigi.task.get_git_commit", return_value="abc1234")
 
