@@ -77,7 +77,12 @@ def render_node_gitlab(node: BaseNode) -> list[dict[str, Any]]:
         envs_json = json.dumps(envs)
 
         cfg = node.work[0].cfg
-        cfg_json = cfg.model_dump_json(exclude_none=True)
+        cfg_json = cfg.model_dump_json(
+            exclude_none=True,
+            exclude_computed_fields=True,
+            exclude_defaults=True,
+            exclude_unset=True
+        )
 
         g_info = gitlab_info(cfg)
         gitlab_info_json = json.dumps(g_info)
