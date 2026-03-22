@@ -52,22 +52,30 @@ def generate(
 ):
     """Generate manifest and child pipeline YAML from environment variables."""
     commands_json = os.environ.get("SCICD_COMMANDS_JSON")
+    envs_json = os.environ.get("SCICD_ENV_JSON")
     cfg_json = os.environ.get("SCICD_CFG_JSON")
     gitlab_info_json = os.environ.get("SCICD_GITLAB_INFO_JSON")
 
-    if not all([commands_json, cfg_json, gitlab_info_json]):
+    if not all([commands_json, envs_json, cfg_json, gitlab_info_json]):
         raise ValueError(
             "Missing required environment variables: "
-            "SCICD_COMMANDS_JSON, SCICD_CFG_JSON, or SCICD_GITLAB_INFO_JSON"
+            "SCICD_COMMANDS_JSON, SCICD_ENV_JSON, SCICD_CFG_JSON, or SCICD_GITLAB_INFO_JSON"
         )
 
     command_list = json.loads(commands_json)
+    env_list = json.loads(envs_json)
     gitlab_info = json.loads(gitlab_info_json)
+
+    if len(command_list) != len(env_list):
+        raise ValueError("Mismatch between number of commands and environment dicts.")
 
     cfg = TaskConfig.model_validate_json(cfg_json)
     wspace = get_workspace()
 
-    manifest_data = [{"command": cmd} for cmd in command_list]
+    # Create unified manifest of work units
+    manifest_data = [
+        {"command": cmd, "env": env} for cmd, env in zip(command_list, env_list)
+    ]
 
     with open("manifest.yml", "w", encoding="utf-8") as f:
         yaml.dump(manifest_data, f, default_flow_style=False)
@@ -89,7 +97,7 @@ def generate(
 def slice_run(
     manifest_path: Annotated[str, Parameter(help="Path to the manifest.yml file.")],
 ):
-    """Execute assigned subset of tasks from manifest file."""
+    """Execute assigned subset of tasks with environment variable overrides."""
     node_index = int(os.environ.get("CI_NODE_INDEX", 1)) - 1
     node_total = int(os.environ.get("CI_NODE_TOTAL", 1))
 
@@ -104,8 +112,14 @@ def slice_run(
         print(f"Worker {node_index+1}/{node_total} running {len(my_tasks)} tasks.")
         for task in my_tasks:
             cmd = task["command"]
+            task_env_overrides = task.get("env", {})
+
+            # Prepare execution environment
+            run_env = os.environ.copy()
+            run_env.update(task_env_overrides)
+
             print(f"Executing: {' '.join(cmd)}")
-            subprocess.run(cmd, check=True)
+            subprocess.run(cmd, env=run_env, check=True)
     else:
         print(f"Worker {node_index+1}/{node_total} has no tasks to run.")
 

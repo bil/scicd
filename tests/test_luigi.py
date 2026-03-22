@@ -79,6 +79,8 @@ def test_luigi_dag_resolution(mocker, tmp_path):
     scicd.config.reset_config()
     # Mock importlib.import_module
     mocker.patch("importlib.import_module")
+    # This stops Luigi from trying to call __import__("dummy")
+    mocker.patch("luigi.cmdline_parser.CmdlineParser._attempt_load_module")
 
     # Mock the CmdlineParser context manager and its return value
     mock_cp = mocker.MagicMock()

@@ -68,35 +68,34 @@ def render_node_gitlab(node: BaseNode) -> list[dict[str, Any]]:
             job["needs"] = node.needs
 
         return [{node.identifier: job}]
-
     elif isinstance(node, SliceNode):
-        all_commands = [adapter.command for adapter in node.work]
-        commands_json = json.dumps(all_commands)
+        # Extract commands and environment variables from all work units
+        commands = [adapter.command for adapter in node.work]
+        envs = [{"SCICD_PARAMS": adapter.params_json} for adapter in node.work]
+
+        commands_json = json.dumps(commands)
+        envs_json = json.dumps(envs)
 
         cfg = node.work[0].cfg
-        cfg_json = cfg.model_dump_json(
-            exclude_unset=True,
-            exclude_none=True,
-            exclude_defaults=True,
-            exclude_computed_fields=True,
-        )
+        cfg_json = cfg.model_dump_json(exclude_none=True)
 
         g_info = gitlab_info(cfg)
         gitlab_info_json = json.dumps(g_info)
 
         gen_id = f"{node.name}_rank{node.rank}_gen"
 
+        # Generator Job: Dynamically creates the child pipeline YAML
         gen_job = deepcopy(g_info)
         gen_job["stage"] = f"stage_{node.rank}"
 
+        # Pass inputs via environment variables
         gen_vars = gen_job.get("variables", {})
-        gen_vars.update(
-            {
-                "SCICD_COMMANDS_JSON": commands_json,
-                "SCICD_CFG_JSON": cfg_json,
-                "SCICD_GITLAB_INFO_JSON": gitlab_info_json,
-            }
-        )
+        gen_vars.update({
+            "SCICD_COMMANDS_JSON": commands_json,
+            "SCICD_ENV_JSON": envs_json,
+            "SCICD_CFG_JSON": cfg_json,
+            "SCICD_GITLAB_INFO_JSON": gitlab_info_json,
+        })
         gen_job["variables"] = gen_vars
 
         gen_command = [
