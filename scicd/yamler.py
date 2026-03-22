@@ -32,13 +32,17 @@ def yml_suffix(path: Union[str, pathlib.Path]) -> str:
 
 
 def expand_vars(data: T) -> T:
-    """Expand environment variables in strings and nested structures."""
+    """Expand environment variables in strings and nested structures with $$ escaping."""
     if isinstance(data, dict):
         return {k: expand_vars(v) for k, v in data.items()}  # type: ignore
     if isinstance(data, list):
         return [expand_vars(v) for v in data]  # type: ignore
     if isinstance(data, str):
-        return os.environ.get(data[1:], data) if data.startswith('$') else os.path.expandvars(data) # type: ignore
+        # Use a unique placeholder to protect escaped $$ during expansion
+        placeholder = "___SCICD_ESCAPED_DOLLAR___"
+        text = data.replace("$$", placeholder)
+        text = os.path.expandvars(text)
+        return text.replace(placeholder, "$")  # type: ignore
     return data
 
 
@@ -113,9 +117,6 @@ def load_yaml(path: str, **kwargs: Any) -> dict[str, Any]:
         raise FileNotFoundError(f"YAML file not found: {path}")
 
     context = extract_context(path, **kwargs)
-    # Inject environment variables for build-time interpolation
-    if "env" not in context:
-        context["env"] = os.environ
 
     post = frontmatter.load(path)
 
@@ -123,7 +124,7 @@ def load_yaml(path: str, **kwargs: Any) -> dict[str, Any]:
     rendered = jinja_env.from_string(post.content).render(context)
     data: dict[str, Any] = yaml.safe_load(rendered) or {}
 
-    return data
+    return expand_vars(data)
 
 
 def slugify(text: str) -> str:

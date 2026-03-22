@@ -1,53 +1,67 @@
 import os
 import textwrap
+import pytest
+from scicd.config import load_yaml, TaskConfig, WorkspaceConfig, RemoteConfig
 
-from scicd.config import WorkspaceConfig, RemoteConfig, TaskConfig, load_yaml
-
-
-def test_selective_expansion():
-    os.environ["TEST_VAR"] = "expanded_value"
-    os.environ["HOME_PATH"] = "/home/user"
-
-    # Workspace expansion
-    ws = WorkspaceConfig(url="https://$TEST_VAR.com", project="org/$TEST_VAR")
-    assert ws.url == "https://expanded_value.com"
-    assert ws.project == "org/expanded_value"
-
-    # Remote expansion
-    rem = RemoteConfig(root="$HOME_PATH/data", url="s3://$TEST_VAR/bucket")
-    assert rem.root.endswith("/home/user/data")
-    assert rem.url == "s3://expanded_value/bucket"
-
-    # Namespace inclusion
-    rem = RemoteConfig(
-        root="$HOME_PATH/data", url="s3://$TEST_VAR/bucket", namespace="a-namespace"
-    )
-    assert rem.total_root.endswith("a-namespace")
-    assert rem.total_url.endswith("a-namespace")
-
-    # TaskConfig expansion
-    tc = TaskConfig(image="python:$TEST_VAR", variables={"MY_VAR": "$KEEP_ME"})
-    assert tc.image == "python:expanded_value"
-    # Task variables should NOT be expanded by SciCD
-    assert tc.variables["MY_VAR"] == "$KEEP_ME"
-
-
-def test_jinja_env_expansion(tmp_path):
-
+def test_expansion_and_escaping(tmp_path):
+    """Verify $VAR expansion and $$VAR escaping via load_yaml."""
     os.environ["BUILD_TIME"] = "2024"
-    config_content = textwrap.dedent(
-        """
+    os.environ["MY_IMAGE"] = "python:3.10"
+    os.environ["DATA_ROOT"] = "/scratch/data"
+    
+    config_content = textwrap.dedent("""
         workspace:
-          project: "my-project-{{ env.BUILD_TIME }}"
-        cpu: 2
+          project: "my-project-$BUILD_TIME"
+        
+        image: "$MY_IMAGE"
+        
+        remote:
+          root: "$DATA_ROOT/outputs"
+          url: "s3://bucket/$BUILD_TIME"
+        
         variables:
-          RUNTIME_VAR: "$CI_JOB_ID"
-    """
-    )
+          BUILD_STAMP: "$BUILD_TIME"
+          RUNTIME_JOB_ID: "$$CI_JOB_ID"
+          ESCAPED_DOLLAR: "$$$$VAL"
+    """)
     config_file = tmp_path / "scicd.yaml"
     config_file.write_text(config_content)
-
+    
     data = load_yaml(str(config_file))
-
+    
+    # 1. Basic Expansion
     assert data["workspace"]["project"] == "my-project-2024"
-    assert data["variables"]["RUNTIME_VAR"] == "$CI_JOB_ID"
+    assert data["image"] == "python:3.10"
+    assert data["remote"]["root"] == "/scratch/data/outputs"
+    assert data["remote"]["url"] == "s3://bucket/2024"
+    
+    # 2. Variable expansion in nested dicts
+    assert data["variables"]["BUILD_STAMP"] == "2024"
+    
+    # 3. Escaping with $$
+    assert data["variables"]["RUNTIME_JOB_ID"] == "$CI_JOB_ID"
+    assert data["variables"]["ESCAPED_DOLLAR"] == "$$VAL"
+
+def test_no_expansion_on_direct_instantiation():
+    """
+    Verify that models do NOT expand variables themselves.
+    Expansion is now a build-time/load-time concern handled by yamler.
+    """
+    os.environ["TEST_VAR"] = "fail"
+    
+    # Direct model creation should preserve the literal string
+    tc = TaskConfig(image="$TEST_VAR")
+    assert tc.image == "$TEST_VAR"
+    
+    ws = WorkspaceConfig(project="org/$TEST_VAR")
+    assert ws.project == "org/$TEST_VAR"
+
+def test_complex_escaping(tmp_path):
+    """Verify complex mixed strings expand correctly."""
+    os.environ["A"] = "alpha"
+    config_content = "user: { val: '$$$$$A and $A and $$A' }"
+    config_file = tmp_path / "scicd.yaml"
+    config_file.write_text(config_content)
+    
+    data = load_yaml(str(config_file))
+    assert data["user"]["val"] == "$$alpha and alpha and $A"

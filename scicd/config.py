@@ -2,7 +2,7 @@
 Configuration management system for SciCD.
 
 This module provides Pydantic-based configuration models for workspaces and tasks,
-along with singleton managers for global configuration state and CLI override
+along with singleton managers for global configuration state and CLI override 
 interception.
 """
 
@@ -25,7 +25,7 @@ from pydantic import (
     computed_field,
 )
 
-from scicd.yamler import deep_update, load_yaml, nest_dict
+from scicd.yamler import deep_update, load_yaml, nest_dict, expand_vars
 
 
 class DynamicModel(BaseModel):
@@ -48,7 +48,9 @@ class DynamicModel(BaseModel):
 
     def keys(self):
         """Enable dictionary-like unpacking."""
-        return list(self.model_extra.keys() if self.model_extra else [])
+        return list(self.__class__.model_fields.keys()) + list(
+            self.model_extra.keys() if self.model_extra else []
+        )
 
     def __getitem__(self, key):
         """Enable dictionary-like access."""
@@ -130,14 +132,10 @@ class RemoteConfig(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def expand_env_vars(cls, data: Any) -> Any:
-        """Expand environment variables in root, url, and namespace strings."""
-        if isinstance(data, dict):
-            for k in ["root", "url", "namespace"]:
-                if data.get(k):
-                    data[k] = os.path.expandvars(data[k])
-            if data.get("root"):
-                data["root"] = str(Path(data["root"]).resolve())
+    def resolve_path(cls, data: Any) -> Any:
+        """Resolve the local root to an absolute path."""
+        if isinstance(data, dict) and data.get("root"):
+            data["root"] = str(Path(data["root"]).resolve())
         return data
 
     @model_validator(mode="after")
@@ -201,14 +199,6 @@ class TaskConfig(BaseModel):
     queue: QueueConfig = QueueConfig()
     remote: RemoteConfig = RemoteConfig()
     user: UserConfig = UserConfig()
-
-    @model_validator(mode="before")
-    @classmethod
-    def expand_image(cls, data: Any) -> Any:
-        """Expand environment variables in the image tag."""
-        if isinstance(data, dict) and data.get("image"):
-            data["image"] = os.path.expandvars(data["image"])
-        return data
 
     @field_validator("memory", "disk", mode="before")
     @classmethod
@@ -312,7 +302,7 @@ class TaskConfig(BaseModel):
             raise ValueError(f"Could not match memory string: {mem_str}")
         value = int(match.group(1))
         unit = match.group(2).upper()
-
+        
         base_unit = unit.removesuffix("i").upper()
         multipliers = {"K": 1 / 1024, "M": 1, "G": 1024, "T": 1024 * 1024}
         mb = value * multipliers[base_unit]
@@ -359,17 +349,6 @@ class WorkspaceConfig(BaseModel):
     project: str = ""
     cicd: dict[str, Any] = {}
 
-    @model_validator(mode="before")
-    @classmethod
-    def expand_vars(cls, data: Any) -> Any:
-        """Expand environment variables in URL and project strings."""
-        if isinstance(data, dict):
-            if data.get("url"):
-                data["url"] = os.path.expandvars(data["url"])
-            if data.get("project"):
-                data["project"] = os.path.expandvars(data["project"])
-        return data
-
 
 # ================================== HELPERS =================================
 
@@ -414,8 +393,8 @@ def find_config_path() -> Path:
             return p
 
     raise FileNotFoundError(
-        "SciCD configuration file not found. "
-        "Create 'scicd.yaml' or '.scicd/config.yaml' in your project root."
+        "SciCD configuration file not found in any standard location. "
+        "Please provide a configuration file."
     )
 
 
@@ -626,8 +605,9 @@ def intercept_cli_overrides(kwargs: dict[str, Any]) -> dict[str, Any]:
         else:
             frontend_params[k] = v
 
-    # Nest the overrides
+    # Nest and Expand overrides
     task_overrides = nest_dict(task_overrides_flat)
+    task_overrides = expand_vars(task_overrides)
 
     # Apply runtime defaults
     if task_overrides:
