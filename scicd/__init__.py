@@ -1,3 +1,1 @@
-"""
-Utility packages for the boilerplate framework.
-"""
+"""SciCD: Scientific CI/CD orchestration framework."""

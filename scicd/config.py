@@ -31,9 +31,20 @@ from scicd.yamler import deep_update, load_yaml, nest_dict
 class DynamicModel(BaseModel):
     """
     A Pydantic model that allows arbitrary extra fields.
+    Automatically wraps nested dictionaries in DynamicModel instances.
     """
 
     model_config = ConfigDict(extra="allow")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _recursive_wrap(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            return {
+                k: (cls.model_validate(v) if isinstance(v, dict) else v)
+                for k, v in data.items()
+            }
+        return data
 
 
 class UserConfig(DynamicModel):
