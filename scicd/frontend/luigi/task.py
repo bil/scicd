@@ -83,7 +83,9 @@ def get_task_config(task: luigi.Task) -> "scicd.config.TaskConfig":
     return scicd.config.get_task_config(**overrides)
 
 
-def generate_scitask(cls: Type[T], hashed: bool = True) -> Type[T]:
+def augment_task(
+    cls: Type[T], hash_cfg: bool = True, hash_commit: bool = True
+) -> Type[T]:
     """
     Class factory that augments a standard Luigi task with SciCD features.
 
@@ -95,7 +97,8 @@ def generate_scitask(cls: Type[T], hashed: bool = True) -> Type[T]:
 
     Args:
         cls: The base Luigi task class to augment.
-        hashed: If True, enables content-based fingerprinting.
+        hash: If True, enables content-based fingerprinting.
+        hash_commit: If True, include current commit as part of fingerprint.
 
     Returns:
         A new class inheriting from 'cls' with SciCD capabilities.
@@ -104,7 +107,8 @@ def generate_scitask(cls: Type[T], hashed: bool = True) -> Type[T]:
     class Task(cls):
         """Internal augmented class."""
 
-        _is_hashed = hashed
+        hashed = hash_cfg
+        hashed_commit = hash_commit
 
         scicd_local = luigi.BoolParameter(
             default=False,
@@ -136,7 +140,7 @@ def generate_scitask(cls: Type[T], hashed: bool = True) -> Type[T]:
             """Standardized base directory for task outputs."""
             base_dir = "."
             if self.task_config.remote and self.task_config.remote.root:
-                base_dir = self.task_config.remote.root
+                base_dir = self.task_config.remote.get_root()
 
             subpath = self.path
 
@@ -167,10 +171,12 @@ def generate_scitask(cls: Type[T], hashed: bool = True) -> Type[T]:
         def get_fingerprint(self) -> str:
             """Unique hash of code version, params, and config."""
             data = {
-                "commit": get_git_commit(),
                 "params": self.param_kwargs,
                 "config": self.cfg_dict,
             }
+            if self.hashed_commit:
+                data["commit"] = get_git_commit()
+
             dump = json.dumps(data, sort_keys=True)
             return hashlib.sha256(dump.encode()).hexdigest()[:12]
 
@@ -194,13 +200,13 @@ def generate_scitask(cls: Type[T], hashed: bool = True) -> Type[T]:
             """
             Augmented completion check with self-healing (auto-pull).
             """
-            # 1. Perform standard local check first
+            # Perform standard check first
             is_complete = super().complete()
             if is_complete:
-                if not hashed or self._check_fingerprints():
+                if not self.hashed or self._check_fingerprints():
                     return True
 
-            # 2. Remote check: If missing locally, try to pull from remote
+            # Remote check: If missing locally, try to pull from remote
             if (
                 self.task_config.remote
                 and self.task_config.remote.pull_inputs
@@ -209,7 +215,7 @@ def generate_scitask(cls: Type[T], hashed: bool = True) -> Type[T]:
                 outputs = luigi.task.flatten(self.output())
                 files_to_pull = [Path(ot.path) for ot in outputs if hasattr(ot, "path")]
 
-                if hashed:
+                if self.hashed:
                     fp_files = []
                     for p in files_to_pull:
                         fp_files.append(
@@ -219,7 +225,7 @@ def generate_scitask(cls: Type[T], hashed: bool = True) -> Type[T]:
                 if files_to_pull:
                     if scicd.remote.pull(*files_to_pull):
                         # Re-verify everything after the pull
-                        if hashed:
+                        if self.hashed:
                             return self._check_fingerprints()
                         return super().complete()
 
@@ -240,8 +246,7 @@ def generate_scitask(cls: Type[T], hashed: bool = True) -> Type[T]:
     @Task.event_handler(luigi.Event.SUCCESS)
     def _scicd_on_success(task):
         """Handle checkpointing and remote pushing."""
-        # If hashed, save the fingerprint first
-        if hashed:
+        if task.hashed:
             current_fp = task.get_fingerprint()
             for ot in luigi.task.flatten(task.output()):
                 if hasattr(ot, "path"):
@@ -282,4 +287,6 @@ def generate_scitask(cls: Type[T], hashed: bool = True) -> Type[T]:
 
 
 # Standard export
-SciTask = generate_scitask(luigi.Task, hashed=True)
+AutoTask = augment_task(luigi.Task, hash_cfg=False)
+SciTask = augment_task(luigi.Task, hash_cfg=True, hash_commit=False)
+DevTask = augment_task(luigi.Task, hash_cfg=True, hash_commit=True)

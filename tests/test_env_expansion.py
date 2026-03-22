@@ -8,17 +8,24 @@ def test_selective_expansion():
     os.environ["TEST_VAR"] = "expanded_value"
     os.environ["HOME_PATH"] = "/home/user"
 
-    # 1. Workspace expansion
+    # Workspace expansion
     ws = WorkspaceConfig(url="https://$TEST_VAR.com", project="org/$TEST_VAR")
     assert ws.url == "https://expanded_value.com"
     assert ws.project == "org/expanded_value"
 
-    # 2. Remote expansion
+    # Remote expansion
     rem = RemoteConfig(root="$HOME_PATH/data", url="s3://$TEST_VAR/bucket")
-    assert rem.root.endswith("/home/user/data")  # resolve() makes it absolute
+    assert rem.root.endswith("/home/user/data")
     assert rem.url == "s3://expanded_value/bucket"
 
-    # 3. TaskConfig expansion
+    # Namespace inclusion
+    rem = RemoteConfig(
+        root="$HOME_PATH/data", url="s3://$TEST_VAR/bucket", namespace="a-namespace"
+    )
+    assert rem.get_root().endswith("a-namespace")
+    assert rem.get_url().endswith("a-namespace")
+
+    # TaskConfig expansion
     tc = TaskConfig(image="python:$TEST_VAR", variables={"MY_VAR": "$KEEP_ME"})
     assert tc.image == "python:expanded_value"
     # Task variables should NOT be expanded by SciCD

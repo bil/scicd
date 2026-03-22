@@ -94,7 +94,6 @@ class SimpleTask(luigi.Task):
     """
 
 
-
 def test_luigi_adapter_no_resources(mocker):
     """
     Ensures that the adapter provides sensible defaults when a Task has no resource definitions.

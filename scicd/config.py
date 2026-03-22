@@ -124,6 +124,11 @@ class RemoteConfig:
     Format depends on protocol (e.g., 's3://my-bucket/path' or 'rclone-remote:path').
     """
 
+    namespace: Optional[str] = None
+    """
+    An optional namespace used as a suffix on both root/url.
+    """
+
     protocol: Literal["rclone", "https"] = "rclone"
     """
     Transfer protocol to use.
@@ -156,6 +161,9 @@ class RemoteConfig:
         if self.url:
             self.url = os.path.expandvars(self.url)
 
+        if self.namespace:
+            self.namespace = os.path.expandvars(self.namespace)
+
         valid_protocols = ["rclone", "https"]
         if self.protocol not in valid_protocols:
             raise ValueError(
@@ -171,6 +179,18 @@ class RemoteConfig:
                 raise ValueError(
                     "remote.root is mandatory when pull_inputs or push_outputs is enabled"
                 )
+
+    def get_root(self):
+        """Helper to get root with optional namespace suffix"""
+        if self.root and self.namespace:
+            return f"{self.root}/{self.namespace}"
+        return self.root
+
+    def get_url(self):
+        """Helper to get url with optional namespace suffix"""
+        if self.url and self.namespace:
+            return f"{self.url}/{self.namespace}"
+        return self.url
 
 
 @dataclass

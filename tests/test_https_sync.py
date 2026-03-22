@@ -3,7 +3,6 @@ Integration tests for HTTPS-based remote storage synchronization.
 """
 
 import os
-import json
 import threading
 import shutil
 from http.server import HTTPServer, BaseHTTPRequestHandler

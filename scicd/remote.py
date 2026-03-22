@@ -114,7 +114,7 @@ def pull_full() -> bool:
 
     if protocol == "rclone":
         flags = " ".join(task_config.remote.flags)
-        cmd = f"rclone copy {task_config.remote.url} {task_config.remote.root} {flags}"
+        cmd = f"rclone copy {task_config.remote.get_url()} {task_config.remote.get_root()} {flags}"
         subprocess.check_call(cmd, shell=True)
         return True
 
@@ -139,8 +139,8 @@ def _https_batch(
     ):
         return True
 
-    local_root = Path(task_config.remote.root)
-    base_url = task_config.remote.url.rstrip("/")
+    local_root = Path(task_config.remote.get_root())
+    base_url = task_config.remote.get_url().rstrip("/")
 
     # Use a session to reuse the TCP connection for multiple files
     with requests.Session() as session:
@@ -192,8 +192,8 @@ def _rclone_batch(
         return True
 
     flags = " ".join(task_config.remote.flags)
-    local_root = Path(task_config.remote.root)
-    remote_root = task_config.remote.url
+    local_root = Path(task_config.remote.get_root())
+    remote_root = task_config.remote.get_url()
 
     rel_paths = []
     for f in files:

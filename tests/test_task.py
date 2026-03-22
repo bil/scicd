@@ -3,9 +3,9 @@ Tests for the core SciTask lifecycle, fingerprinting, and event handlers.
 """
 
 import luigi
-import pytest
 from pathlib import Path
 
+import scicd.config
 from scicd.frontend.luigi.task import SciTask
 from scicd.config import reset_config, TaskConfig
 
@@ -229,17 +229,19 @@ def test_luigi_lifecycle_and_events(mocker, tmp_path):
     Verifies that the full Luigi execution lifecycle correctly triggers SciCD events.
     """
     mocker.patch("scicd.config.load_config", return_value={})
-    import scicd.config
 
     scicd.config.reset_config()
     # Mock workspace and git
-    mock_task_config = mocker.MagicMock()
-    mock_task_config.remote.root = str(tmp_path)
-    mock_task_config.remote.pull_inputs = True
-    mock_task_config.remote.push_outputs = True
-    mocker.patch(
-        "scicd.frontend.luigi.task.get_task_config", return_value=mock_task_config
+    task_config = TaskConfig(
+        remote={
+            "url": "www.monkey-magic.com",
+            "root": str(tmp_path),
+            "pull_inputs": True,
+            "push_outputs": True,
+        }
     )
+
+    mocker.patch("scicd.frontend.luigi.task.get_task_config", return_value=task_config)
     mocker.patch("scicd.frontend.luigi.task.get_git_commit", return_value="abc1234")
 
     # Mock remote actions
@@ -265,7 +267,6 @@ def test_local_opts_disable_remote(mocker, tmp_path):
     """
     Ensures that overriding scicd_local disables network calls.
     """
-    import scicd.config
 
     scicd.config.reset_config()
     mock_task_config = mocker.MagicMock()
