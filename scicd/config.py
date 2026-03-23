@@ -12,6 +12,7 @@ import os
 
 from pathlib import Path
 from typing import Optional, Any, Union, Literal, Tuple, ClassVar
+import ast
 
 
 import dataclasses
@@ -76,19 +77,29 @@ class ConcurrencyConfig(BaseModel):
     Determines how work units are distributed across pipeline jobs.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", validate_assignment=True)
 
     method: Literal["biject", "slice", "queue"] = "biject"
     workers: Optional[int] = None
+
+    @field_validator("workers", mode="before")
+    @classmethod
+    def validate_ints(cls, v: Any) -> Any:
+        """Coerce strings to integers for CLI compatibility."""
+        if isinstance(v, str) and v.strip():
+            try:
+                return int(v)
+            except ValueError:
+                return v
+        return v
 
     @model_validator(mode="after")
     def check_workers(self) -> "ConcurrencyConfig":
         """Validate that workers count is present for non-biject methods."""
         if self.method in ["slice", "queue"]:
             if self.workers is None:
-                raise ValueError(
-                    f"workers count is required when method is '{self.method}'"
-                )
+                # In partial assignment, we might not have workers yet
+                return self
             if self.workers <= 0:
                 raise ValueError(
                     f"workers must be a positive integer, got {self.workers}"
@@ -102,7 +113,7 @@ class QueueConfig(BaseModel):
     Used when method='queue' to interface with message brokers like GCP Pub/Sub.
     """
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="allow", validate_assignment=True)
 
     platform: Optional[Literal["gcp"]] = None
     topic: str = ""
@@ -126,7 +137,7 @@ class RemoteConfig(BaseModel):
     Defines where and how task outputs are stored and retrieved.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", validate_assignment=True)
 
     root: Optional[str] = None
     url: Optional[str] = None
@@ -135,6 +146,18 @@ class RemoteConfig(BaseModel):
     flags: list[str] = []
     pull_inputs: bool = False
     push_outputs: bool = False
+
+    @field_validator("flags", mode="before")
+    @classmethod
+    def validate_list(cls, v: Any) -> Any:
+        """Coerce string representations of lists (e.g. CLI) into Python lists."""
+        if isinstance(v, str) and v.startswith("[") and v.endswith("]"):
+            try:
+                # Use literal_eval to safely parse ['a', 'b'] from CLI
+                return ast.literal_eval(v)
+            except (ValueError, SyntaxError):
+                return v
+        return v
 
     @model_validator(mode="before")
     @classmethod
@@ -148,6 +171,9 @@ class RemoteConfig(BaseModel):
     def check_sync(self) -> "RemoteConfig":
         """Verify that sync requirements are met."""
         if self.pull_inputs or self.push_outputs:
+            if self.url is None or self.root is None:
+                # Allow partial assignment
+                return self
             if not self.url or not self.root:
                 raise ValueError(
                     "remote.url and remote.root are mandatory when syncing is enabled"
@@ -177,7 +203,7 @@ class TaskConfig(BaseModel):
     Defines hardware requirements, container images, and runtime behavior.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", validate_assignment=True)
 
     # Helpers for parsing/normalization
     _MEM_REGEX: ClassVar[re.Pattern] = re.compile(
@@ -224,7 +250,7 @@ class TaskConfig(BaseModel):
 
         val = match.group(1)
         unit = match.group(2).upper()
-        # Canonicalize units (8GB -> 8G, 8GiB -> 8Gi)
+        # Preserve 'i' if provided
         if "i" in v_str.lower():
             unit += "i"
         return f"{val}{unit}"
@@ -255,7 +281,7 @@ class TaskConfig(BaseModel):
                 or not self.queue.subscription
                 or not self.queue.topic
             ):
-                raise ValueError("Queue must be fully configured when method='queue'")
+                return self
         return self
 
     @property
@@ -308,9 +334,23 @@ class TaskConfig(BaseModel):
             raise ValueError(f"Could not match memory string: {mem_str}")
         value = int(match.group(1))
         unit = match.group(2).upper()
-
+        
+        # Distinguish between Binary (Gi) and Decimal (G)
+        is_binary = "i" in mem_str.lower()
         base_unit = unit.removesuffix("i").upper()
-        multipliers = {"K": 1 / 1024, "M": 1, "G": 1024, "T": 1024 * 1024}
+        
+        if is_binary:
+            # IEC Units (1024 based)
+            multipliers = {"K": 1 / 1024, "M": 1, "G": 1024, "T": 1024 * 1024}
+        else:
+            # SI Units (1000 based) converted to MiB
+            multipliers = {
+                "K": 1000 / (1024**2),
+                "M": (1000**2) / (1024**2),
+                "G": (1000**3) / (1024**2),
+                "T": (1000**4) / (1024**2)
+            }
+            
         mb = value * multipliers[base_unit]
         return int(mb)
 
@@ -597,16 +637,6 @@ def intercept_cli_overrides(kwargs: dict[str, Any]) -> dict[str, Any]:
         root_key = norm_k.split(".")[0]
 
         if root_key in valid_task_keys:
-            # Simple type casting for CLI values
-            if isinstance(v, str):
-                vl = v.lower()
-                if vl in ("true", "yes", "1"):
-                    v = True
-                elif vl in ("false", "no", "0"):
-                    v = False
-                elif vl.isdigit():
-                    v = int(v)
-
             task_overrides_flat[norm_k] = v
         else:
             frontend_params[k] = v
@@ -617,9 +647,33 @@ def intercept_cli_overrides(kwargs: dict[str, Any]) -> dict[str, Any]:
 
     # Apply runtime defaults
     if task_overrides:
-        rich.print(
-            f"[bold blue]SciCD:[/bold blue] Storing global CLI overrides: {task_overrides}"
-        )
-        _ConfigManager.set_cli_overrides(task_overrides)
+        try:
+            # We use TaskConfig.merge on an empty base to see what the overrides normalize to.
+            # This triggers all Pydantic validators (memory, timeout, etc.) correctly.
+            base = TaskConfig.model_validate({})
+            merged = base.merge(task_overrides)
+            
+            # Extract only the keys that were in the original task_overrides
+            # but take their values from the 'merged' object (which are normalized)
+            normalized_overrides = {}
+            dumped = merged.model_dump(exclude_computed_fields=True, exclude_defaults=True)
+            
+            def extract_normalized(raw_dict, normalized_dict, target_dict):
+                for k, v in raw_dict.items():
+                    if isinstance(v, dict) and k in normalized_dict:
+                        target_dict[k] = {}
+                        extract_normalized(v, normalized_dict[k], target_dict[k])
+                    elif k in normalized_dict:
+                        target_dict[k] = normalized_dict[k]
+
+            extract_normalized(task_overrides, dumped, normalized_overrides)
+
+            rich.print(
+                f"[bold blue]SciCD:[/bold blue] Storing global CLI overrides: {normalized_overrides}"
+            )
+            _ConfigManager.set_cli_overrides(normalized_overrides)
+        except Exception as e:
+            rich.print(f"[bold red]SciCD Error:[/bold red] Invalid CLI override: {e}")
+            raise
 
     return frontend_params

@@ -2,7 +2,7 @@
 Tests for CLI-based configuration overrides and parameter parsing.
 """
 
-from scicd.config import TaskConfig, _ConfigManager
+from scicd.config import TaskConfig, _ConfigManager, get_task_config
 from scicd.build import build
 
 
@@ -80,7 +80,11 @@ def test_build_namespaced_parsing(mocker, tmp_path):
     assert cli_overrides["cpu"] == 4
     assert cli_overrides["image"] == "alpine"
     assert cli_overrides["remote"]["pull_inputs"] is True
-    assert cli_overrides["remote"]["flags"] == "['--test']"
+    assert cli_overrides["remote"]["flags"] == ["--test"]
+
+    merged = get_task_config()
+    assert merged.cpu == 4
+    assert merged.remote.pull_inputs is True
 
     # Check native params were passed to the frontend
     # TaskA-date and global-param should be passed through

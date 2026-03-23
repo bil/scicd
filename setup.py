@@ -13,7 +13,6 @@ setup(
         "PyYAML",
         "Jinja2",
         "cyclopts",
-        "tomli",
         "rich",
         "requests",
         "pydantic",

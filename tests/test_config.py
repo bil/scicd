@@ -44,7 +44,7 @@ def test_task_config_parsing():
     """
     config = TaskConfig(memory="16Gi", disk="100G", timeout="1h 30m")
     assert config.memory_mb == 16384  # 16 * 1024
-    assert config.disk_mb == 102400  # 100 * 1024
+    assert config.disk_mb == 95367  # 100 * (1000**3) / (1024**2)
     assert config.timeout_minutes == 90
 
 
