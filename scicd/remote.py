@@ -140,17 +140,17 @@ def _https_batch(
                     local_p.parent.mkdir(parents=True, exist_ok=True)
                     try:
                         with tempfile.NamedTemporaryFile(
-                            dir=local_p.parent, 
-                            prefix=local_p.name + ".", 
-                            suffix=".tmp", 
-                            delete=False
+                            dir=local_p.parent,
+                            prefix=local_p.name + ".",
+                            suffix=".tmp",
+                            delete=False,
                         ) as tmp:
                             tmp_name = tmp.name
                             for chunk in response.iter_content(chunk_size=8192):
                                 tmp.write(chunk)
                         os.replace(tmp_name, local_p)
                     except Exception:
-                        if 'tmp_name' in locals() and os.path.exists(tmp_name):
+                        if "tmp_name" in locals() and os.path.exists(tmp_name):
                             os.remove(tmp_name)
                         raise
 
