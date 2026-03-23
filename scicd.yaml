@@ -17,3 +17,5 @@ cpu: 1
 memory: 4Gi
 retry: 0
 tags: [ "bilkube" ]
+remote:
+  root: "tmp"
