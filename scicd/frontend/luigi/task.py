@@ -158,7 +158,7 @@ def augment_task(
             """Generate deterministic hash of task state."""
             data = {
                 "params": self.param_kwargs,
-                "config": self.cfg_dict,
+                "config": self.cfg.model_dump(),
             }
             if self.hashed_commit:
                 data["commit"] = get_git_commit()

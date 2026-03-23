@@ -138,9 +138,21 @@ def _https_batch(
                     response.raise_for_status()
 
                     local_p.parent.mkdir(parents=True, exist_ok=True)
-                    with open(local_p, "wb") as f:
-                        for chunk in response.iter_content(chunk_size=8192):
-                            f.write(chunk)
+                    try:
+                        with tempfile.NamedTemporaryFile(
+                            dir=local_p.parent, 
+                            prefix=local_p.name + ".", 
+                            suffix=".tmp", 
+                            delete=False
+                        ) as tmp:
+                            tmp_name = tmp.name
+                            for chunk in response.iter_content(chunk_size=8192):
+                                tmp.write(chunk)
+                        os.replace(tmp_name, local_p)
+                    except Exception:
+                        if 'tmp_name' in locals() and os.path.exists(tmp_name):
+                            os.remove(tmp_name)
+                        raise
 
             except (requests.RequestException, ValueError) as e:
                 print(f"HTTPS {direction} failed for {local_p}: {e}")
