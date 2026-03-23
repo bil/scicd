@@ -46,7 +46,10 @@ task:
 
 SciCD automatically normalizes specific string formats:
 
-- **Memory/Disk:** '8GB', '8GiB', and '8G' are all stored as '8G'. Integers are assumed to be megabytes (MiB).
+- **Memory/Disk:** Supports both **SI (Decimal)** and **IEC (Binary)** units.
+    - `1G`, `1GB` (SI): Uses $1000^3$ bytes.
+    - `1Gi`, `1GiB` (IEC): Uses $1024^3$ bytes.
+    - Integers are assumed to be megabytes (MiB).
 - **Time/Timeout:** '1h30m' is stored as '1h 30m'. Integers are assumed to be minutes.
 
 ## Configuration Precedence

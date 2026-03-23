@@ -163,8 +163,8 @@ def augment_task(
             if self.hashed_commit:
                 data["commit"] = get_git_commit()
 
-            # Deterministic JSON dump using Pydantic's optimized logic
-            dump = DynamicModel.model_validate(data).model_dump_json()
+            # Deterministic JSON dump using sorted keys to ensure stable hashing
+            dump = json.dumps(data, sort_keys=True)
             return hashlib.sha256(dump.encode()).hexdigest()[:12]
 
         def _check_fingerprints(self) -> bool:
