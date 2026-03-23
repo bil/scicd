@@ -26,7 +26,7 @@ class RunTests(SciTask):
         print(self.output())
         with open(self.output().path, "w", encoding="utf-8") as f:
             f.write("Done!")
-    
+
     @property
     def path(self):
         return self.python_version
