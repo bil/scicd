@@ -15,7 +15,7 @@ from scicd.config import DynamicModel
 class BaseAdapter(ABC):
     """
     Abstract base class for all work unit adapters.
-    
+
     An adapter wraps a framework-specific task (e.g., a Luigi Task) and
     provides standard properties for name, parameters, resource requirements,
     and the command-line string required to execute it.

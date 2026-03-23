@@ -1,7 +1,7 @@
 """
 Universal Build Orchestrator for SciCD.
 
-This module provides the top-level 'build' entrypoint that coordinates frontends 
+This module provides the top-level 'build' entrypoint that coordinates frontends
 (framework-specific DAG encoders) and backends (platform-specific YAML generators).
 """
 
@@ -24,7 +24,7 @@ def build(
 ):
     """
     Execute the full SciCD build pipeline.
-    
+
     1. Intercepts global TaskConfig overrides from kwargs.
     2. Resolves the framework-specific target into an abstract DAG.
     3. Exports the DAG into the requested backend format (e.g., GitLab YAML).

@@ -1,7 +1,7 @@
 """
 CLI interface for scicd using Cyclopts.
 
-This module defines all user-facing commands for building pipelines, running tasks 
+This module defines all user-facing commands for building pipelines, running tasks
 locally, and inspecting configuration state.
 """
 

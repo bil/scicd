@@ -13,6 +13,7 @@ from typing import Callable, NamedTuple, Iterable
 
 class Executor(NamedTuple):
     """Represents a registered custom executor and its transformation function."""
+
     name: str
     func: Callable
 
@@ -77,8 +78,8 @@ class _ExecutorRegistry:
 def register_executor(tags: Iterable[str], name: str = None):
     """
     Decorator to register a function as a SciCD executor for a set of tags.
-    
-    The decorated function should take a TaskConfig and return a dict of 
+
+    The decorated function should take a TaskConfig and return a dict of
     environment variables to inject into the CI/CD job.
     """
 

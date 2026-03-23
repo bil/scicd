@@ -33,7 +33,7 @@ class LuigiAdapter(BaseAdapter):
         # param_kwargs contains the actual Python types (int, bool, etc.)
         # whereas to_str_params() forces everything to a string.
         all_params = self.work.param_kwargs
-        
+
         # Filter for only significant parameters
         sig_names = set(self.work.get_param_names())
         params = {k: v for k, v in all_params.items() if k in sig_names}

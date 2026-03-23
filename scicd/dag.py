@@ -17,10 +17,11 @@ import scicd.adapter
 class BaseNode(ABC):
     """
     Abstract base class for a node in the SciCD DAG.
-    
+
     A node represents a logical step in the pipeline. It contains a list of
     adapters (the work to be done) and a set of dependency nodes.
     """
+
     work: list[scicd.adapter.BaseAdapter]
     rank: int
     node_deps: list[BaseNode]
@@ -64,7 +65,9 @@ class BijectNode(BaseNode):
 
     def __post_init__(self):
         if not self.work or len(self.work) != 1:
-            raise ValueError(f"BijectNode expects exactly 1 unit of work, received: {len(self.work)}")
+            raise ValueError(
+                f"BijectNode expects exactly 1 unit of work, received: {len(self.work)}"
+            )
 
     @property
     def dot_label(self) -> str:

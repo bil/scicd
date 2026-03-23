@@ -51,9 +51,7 @@ def push(
 def pull(
     *files: Annotated[
         Path,
-        Parameter(
-            show_default=False, help="Remote file paths to recover locally."
-        ),
+        Parameter(show_default=False, help="Remote file paths to recover locally."),
     ]
 ) -> bool:
     """Recover specific files from remote storage to local filesystem."""

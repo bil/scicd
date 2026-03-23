@@ -85,7 +85,7 @@ def render_node_gitlab(node: BaseNode) -> list[dict[str, Any]]:
             exclude_none=True,
             exclude_computed_fields=True,
             exclude_defaults=True,
-            exclude_unset=True
+            exclude_unset=True,
         )
 
         g_info = gitlab_info(cfg)
@@ -99,12 +99,14 @@ def render_node_gitlab(node: BaseNode) -> list[dict[str, Any]]:
 
         # Pass inputs via environment variables
         gen_vars = gen_job.get("variables", {})
-        gen_vars.update({
-            "SCICD_COMMANDS_JSON": commands_json,
-            "SCICD_ENV_JSON": envs_json,
-            "SCICD_CFG_JSON": cfg_json,
-            "SCICD_GITLAB_INFO_JSON": gitlab_info_json,
-        })
+        gen_vars.update(
+            {
+                "SCICD_COMMANDS_JSON": commands_json,
+                "SCICD_ENV_JSON": envs_json,
+                "SCICD_CFG_JSON": cfg_json,
+                "SCICD_GITLAB_INFO_JSON": gitlab_info_json,
+            }
+        )
         gen_job["variables"] = gen_vars
 
         gen_command = [

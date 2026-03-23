@@ -13,7 +13,7 @@ def get_branch() -> str:
     """
     Identify the current git branch.
 
-    Checks the 'CI_COMMIT_REF_NAME' environment variable before falling back 
+    Checks the 'CI_COMMIT_REF_NAME' environment variable before falling back
     to the local 'git branch' command.
 
     Returns:
@@ -35,7 +35,7 @@ def get_git_commit() -> str:
     """
     Retrieve the current git commit hash.
 
-    Checks CI environment variables (GitLab SHA or GitHub SHA) first, 
+    Checks CI environment variables (GitLab SHA or GitHub SHA) first,
     then falls back to 'git rev-parse HEAD'.
 
     Returns:

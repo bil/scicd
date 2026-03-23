@@ -27,6 +27,7 @@ class MockAdapter(BaseAdapter):
     @property
     def params(self) -> TaskConfig:
         from scicd.config import DynamicModel
+
         return DynamicModel.model_validate(self._params)
 
     @property

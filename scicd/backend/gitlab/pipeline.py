@@ -26,9 +26,7 @@ def lint_pipeline(
 
     pat = os.getenv("GITLAB_PAT")
     if not pat:
-        raise RuntimeError(
-            "Missing 'GITLAB_PAT' in environment or .env file."
-        )
+        raise RuntimeError("Missing 'GITLAB_PAT' in environment or .env file.")
 
     workspace = get_workspace()
     url = url or workspace.url
@@ -78,9 +76,7 @@ def run_pipeline(
 
     pat = os.getenv("GITLAB_PAT")
     if not pat:
-        raise RuntimeError(
-            "Missing 'GITLAB_PAT' in environment or .env file."
-        )
+        raise RuntimeError("Missing 'GITLAB_PAT' in environment or .env file.")
 
     workspace = get_workspace()
     url = url or workspace.url

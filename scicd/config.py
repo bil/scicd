@@ -2,7 +2,7 @@
 Configuration management system for SciCD.
 
 This module provides Pydantic-based configuration models for workspaces and tasks,
-along with singleton managers for global configuration state and CLI override 
+along with singleton managers for global configuration state and CLI override
 interception.
 """
 
@@ -40,8 +40,14 @@ class DynamicModel(BaseModel):
     @classmethod
     def _recursive_wrap(cls, data: Any) -> Any:
         if isinstance(data, dict):
+            # Only wrap in DynamicModel if the field is NOT explicitly defined in the model.
+            fields = cls.model_fields
             return {
-                k: (cls.model_validate(v) if isinstance(v, dict) else v)
+                k: (
+                    DynamicModel.model_validate(v)
+                    if isinstance(v, dict) and k not in fields
+                    else v
+                )
                 for k, v in data.items()
             }
         return data
@@ -302,7 +308,7 @@ class TaskConfig(BaseModel):
             raise ValueError(f"Could not match memory string: {mem_str}")
         value = int(match.group(1))
         unit = match.group(2).upper()
-        
+
         base_unit = unit.removesuffix("i").upper()
         multipliers = {"K": 1 / 1024, "M": 1, "G": 1024, "T": 1024 * 1024}
         mb = value * multipliers[base_unit]

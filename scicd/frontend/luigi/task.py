@@ -8,6 +8,7 @@ from typing import Any, Type, TypeVar, cast
 
 import luigi
 import rich
+from pydantic import create_model
 
 import scicd.config
 import scicd.remote
@@ -90,6 +91,7 @@ def augment_task(
 
         hashed = hash_cfg
         hashed_commit = hash_commit
+        cfg_spec = None
 
         scicd_local = luigi.BoolParameter(
             default=False,
@@ -138,8 +140,18 @@ def augment_task(
             )
 
         @cached_property
-        def cfg(self) -> DynamicModel:
-            """Return DynamicModel wrapper for cascading configuration."""
+        def cfg(self) -> Any:
+            """Return the resolved configuration, optionally validated by a cfg_spec."""
+            if self.cfg_spec:
+                # Dynamically create a model from the spec dictionary
+                # Base it on DynamicModel to preserve variadics in model_extra
+                model_cls = create_model(
+                    f"{self.__class__.__name__}Cfg",
+                    __base__=DynamicModel,
+                    **self.cfg_spec,
+                )
+                return model_cls.model_validate(self.cfg_dict)
+
             return DynamicModel.model_validate(self.cfg_dict)
 
         def get_fingerprint(self) -> str:
