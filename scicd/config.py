@@ -597,7 +597,7 @@ def cascading_config(
     # Drill down if root_key is provided
     if root_key:
         if isinstance(root_key, str):
-            root_key = [root_key]
+            root_key = root_key.split(".")
 
         for k in root_key:
             cfg = cfg.get(k, {})
