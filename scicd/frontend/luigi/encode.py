@@ -81,6 +81,7 @@ def luigi2dag(module: str, target: str, **kwargs) -> DAG:
     task_id_to_node = _group_tasks_into_nodes_luigi(all_tasks, task_ranks)
 
     # Establish edges between nodes based on task requirements
+    # This is a workaround the Node objects not having a hash
     unique_nodes = list({id(n): n for n in task_id_to_node.values()}.values())
     _build_dag_edges_luigi(unique_nodes, task_id_to_node)
 
@@ -150,14 +151,17 @@ def _group_tasks_into_nodes_luigi(
         adapter = LuigiAdapter(task)
 
         if adapter.cfg.concurrency.method == "slice":
+            # Slice nodes work on a task family at a rank
+            # so this should be unique
             key = (adapter.name, rank)
             if key not in temp_slices:
+                # node_deps is populated in _build_dag_edges_luigi
                 temp_slices[key] = SliceNode(work=[], rank=rank, node_deps=[])
 
             node = temp_slices[key]
             node.work.append(adapter)
             task_id_to_node[tid] = node
-        else:
+        else: # Biject
             node = BijectNode(work=[adapter], rank=rank, node_deps=[])
             task_id_to_node[tid] = node
 
