@@ -1,0 +1,71 @@
+[tool.mypy]
+disable_error_code = ["import-untyped"]
+
+[build-system]
+requires = ["uv_build >= 0.11.3, <0.12"]
+build-backend = "uv_build"
+
+[project]
+name = "scicd"
+version = "0.1.0"
+description = "Powering computation graphs with CI/CD execution"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "python-dotenv",
+    "python-gitlab",
+    "python-frontmatter",
+    "PyYAML",
+    "Jinja2",
+    "cyclopts",
+    "rich",
+    "requests",
+    "pydantic",
+]
+license-files = ["LICENSE"]
+license = "MIT"
+authors = [{ name = "Brain Interfacing Laboratory" }]
+maintainers = [{ name = "Kenji Marshall", email = "kenjimar@pm.me" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3 :: Only",
+    "Intended Audience :: Science/Research",
+    "Typing :: Typed",
+]
+
+[project.scripts]
+scicd = "scicd.cli:app"
+scicd-luigi = "scicd.frontend.luigi:app"
+scicd-make = "scicd.frontend.make:app"
+scicd-gitlab = "scicd.backent.gitlab:app"
+
+[project.urls]
+Homepage = "https://bil.stanford.edu/"
+Repository = "https://github.com/bil/scicd"
+
+[project.optional-dependencies]
+luigi = [
+    "luigi"
+]
+dev = [
+    "quarto-cli",
+    "pytest",
+    "pytest-mock",
+    "nbstripout",
+    "jupyter",
+    "notebook",
+    "pre-commit",
+    "matplotlib",
+    "luigi",
+    "black",
+    "pylint"
+]
+
+[tool.uv.build-backend]
+module-name = "scicd"
+module-root = ""
+
+
+[tool.black]
+target-version = ['py312']
+line-length = 80

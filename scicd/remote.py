@@ -1,208 +1,62 @@
-"""Remote data synchronization utilities for SciCD."""
+"""
+Utilities for path management and remote sync.
+"""
 
+import shlex
 import os
-import subprocess
-import tempfile
+from typing import Optional
 from pathlib import Path
-from typing import Annotated
 
-import requests
-import cyclopts
-from cyclopts import Parameter
-
-import scicd.config
-
-# Custom groups for cleaner --help output
-SURGICAL_GROUP = "Surgical Commands (Used by Tasks)"
-GLOBAL_GROUP = "Global Commands (Used by CI/CD)"
-
-app = cyclopts.App(help="SciCD Remote Sync Utility.")
+from scicd.config import WorkspaceConfig, get_workspace_config
 
 
-@app.command()
-def push(
-    *files: Annotated[
-        Path,
-        Parameter(
-            show_default=False,
-            help="Local file paths to archive to the remote.",
-        ),
-    ]
-) -> bool:
-    """Archive specific local files to remote storage."""
-    task_config = scicd.config.get_task_config()
-    wspace = scicd.config.get_workspace()
-    files = [file.resolve() for file in files]
-
-    if not task_config.remote:
-        return True
-
-    protocol = task_config.remote.protocol
-
-    if protocol == "rclone":
-        return _rclone_batch(task_config, list(files), "push")
-    if protocol == "https":
-        return _https_batch(task_config, wspace, list(files), "push")
-
-    raise ValueError(f"Unsupported protocol for push: {protocol}")
+def get_relpath(path: str | Path, config_path: str):
+    path = Path(path)
+    wspace = get_workspace_config(config_path)
+    if wspace.data_root:
+        path = str(path.relative_to(os.path.expandvars(wspace.data_root)))
+    else:
+        path = str(path)
+    return path
 
 
-@app.command()
-def pull(
-    *files: Annotated[
-        Path,
-        Parameter(show_default=False, help="Remote file paths to recover locally."),
-    ]
-) -> bool:
-    """Recover specific files from remote storage to local filesystem."""
-    task_config = scicd.config.get_task_config()
-    wspace = scicd.config.get_workspace()
-
-    if not task_config.remote:
-        return True
-
-    protocol = task_config.remote.protocol
-
-    if protocol == "rclone":
-        return _rclone_batch(task_config, list(files), "pull")
-    if protocol == "https":
-        return _https_batch(task_config, wspace, list(files), "pull")
-
-    raise ValueError(f"Unsupported protocol for pull: {protocol}")
+def rclone_commands(
+    files: list[str],
+    data_root: str,
+    remote_root: str,
+    flags: Optional[str] = None,
+    direction: str = "pull",
+) -> list[str]:
+    if not files:
+        return []
+    includes = " ".join([f"--filter {shlex.quote(f'+ {f}')}" for f in files])
+    cmd = "rclone copy"
+    if direction == "pull":
+        cmd += f' "{remote_root}" "{data_root}"'
+    elif direction == "push":
+        cmd += f' "{data_root}" "{remote_root}"'
+    cmd += f" --no-traverse --filter {shlex.quote('+ **/')} {includes} --filter {shlex.quote('- *')}"
+    if flags:
+        cmd += f" {flags}"
+    return [cmd]
 
 
-@app.command()
-def pull_full() -> bool:
-    """Sync all remote data to local filesystem (rclone only)."""
-    task_config = scicd.config.get_task_config()
-
-    if (
-        not task_config.remote
-        or not task_config.remote.url
-        or not task_config.remote.root
-    ):
-        print("No remote path configured. Skipping pull-full.")
-        return True
-
-    protocol = task_config.remote.protocol
-
-    if protocol == "rclone":
-        flags = " ".join(task_config.remote.flags)
-        cmd = f"rclone copy {task_config.remote.total_url} {task_config.remote.total_root} {flags}"
-        subprocess.check_call(cmd, shell=True)
-        return True
-
-    raise NotImplementedError(
-        f"pull-full is currently only supported for rclone. "
-        f"Protocol '{protocol}' requires a manual sync or surgical pulls."
-    )
-
-
-def _https_batch(
-    task_config: scicd.config.TaskConfig,
-    wspace: scicd.config.WorkspaceConfig,
-    files: list[Path],
-    direction="push",
-) -> bool:
-    """Execute HTTPS sync for multiple files using requests.Session."""
-    if (
-        not task_config.remote
-        or not files
-        or not task_config.remote.url
-        or not task_config.remote.root
-    ):
-        return True
-
-    local_root = Path(task_config.remote.total_root)
-    base_url = task_config.remote.total_url.rstrip("/")
-
-    with requests.Session() as session:
-        if getattr(wspace, "https_header", None):
-            session.headers.update(getattr(wspace, "https_header"))
-
-        for local_p in files:
-            try:
-                rel_path = local_p.relative_to(local_root)
-                url = f"{base_url}/{rel_path}"
-
-                if direction == "push":
-                    if not local_p.exists():
-                        continue
-                    with open(local_p, "rb") as f:
-                        response = session.put(url, data=f, timeout=60)
-                        response.raise_for_status()
-                else:
-                    response = session.get(url, stream=True, timeout=60)
-                    if response.status_code == 404:
-                        return False
-                    response.raise_for_status()
-
-                    local_p.parent.mkdir(parents=True, exist_ok=True)
-                    try:
-                        with tempfile.NamedTemporaryFile(
-                            dir=local_p.parent,
-                            prefix=local_p.name + ".",
-                            suffix=".tmp",
-                            delete=False,
-                        ) as tmp:
-                            tmp_name = tmp.name
-                            for chunk in response.iter_content(chunk_size=8192):
-                                tmp.write(chunk)
-                        os.replace(tmp_name, local_p)
-                    except Exception:
-                        if "tmp_name" in locals() and os.path.exists(tmp_name):
-                            os.remove(tmp_name)
-                        raise
-
-            except (requests.RequestException, ValueError) as e:
-                print(f"HTTPS {direction} failed for {local_p}: {e}")
-                return False
-
-    return True
-
-
-def _rclone_batch(
-    task_config: scicd.config.TaskConfig, files: list[Path], direction="push"
-) -> bool:
-    """Execute rclone sync using --files-from for batching."""
-    if (
-        not task_config.remote
-        or not files
-        or not task_config.remote.url
-        or not task_config.remote.root
-    ):
-        return True
-
-    flags = " ".join(task_config.remote.flags)
-    local_root = Path(task_config.remote.total_root)
-    remote_root = task_config.remote.total_url
-
-    rel_paths = []
-    for f in files:
-        try:
-            rel_paths.append(str(f.relative_to(local_root)))
-        except ValueError:
-            print(f"{f} not in specified output path {local_root}...")
-            continue
-
-    if not rel_paths:
-        return True
-
-    with tempfile.NamedTemporaryFile(mode="w", delete=False) as tmp:
-        tmp.write("\n".join(rel_paths))
-        tmp_path = tmp.name
-
-    try:
-        src, dest = (
-            (local_root, remote_root)
-            if direction == "push"
-            else (remote_root, local_root)
+def remote_commands(
+    files: list[str], wspace: WorkspaceConfig, direction: str = "pull"
+) -> list[str]:
+    data_root = wspace.data_root
+    remote_root = wspace.remote_root
+    if data_root is None or remote_root is None:
+        return []
+    if remote_root.startswith("rclone://"):
+        remote_root = remote_root.replace("rclone://", "")
+        remote_flags = wspace.remote_flags
+        return rclone_commands(
+            files,
+            data_root,
+            remote_root,
+            flags=remote_flags,
+            direction=direction,
         )
-        cmd = f"rclone copy --files-from {tmp_path} {src} {dest} {flags}"
-        subprocess.check_call(cmd, shell=True)
-        return True
-    except subprocess.CalledProcessError:
-        return False
-    finally:
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
+    else:
+        raise NotImplementedError

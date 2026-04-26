@@ -34,10 +34,14 @@
 #         self.subscriber = pubsub_v1.SubscriberClient() if sub else None
 
 #         self.topic_path = (
-#             self.publisher.topic_path(project, topic) if self.publisher else None
+#             self.publisher.topic_path(project, topic)
+#             if self.publisher
+#             else None
 #         )
 #         self.sub_path = (
-#             self.subscriber.subscription_path(project, sub) if self.subscriber else None
+#             self.subscriber.subscription_path(project, sub)
+#             if self.subscriber
+#             else None
 #         )
 
 #     def publish_messages(self, messages):
@@ -92,7 +96,10 @@
 #         while True:
 #             try:
 #                 response = self.subscriber.pull(
-#                     request={"subscription": self.sub_path, "max_messages": 100},
+#                     request={
+#                         "subscription": self.sub_path,
+#                         "max_messages": 100,
+#                     },
 #                     timeout=2,
 #                 )
 #                 if not response.received_messages:

@@ -1,7 +1,6 @@
 default:
   before_script:
-  - pip install --upgrade pip
-  - pip install -e .[test]
+  - python3 -m pip install -e .[test]
 workflow:
   rules:
   - if: $CI_PIPELINE_SOURCE == "push"

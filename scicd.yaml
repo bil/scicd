@@ -1,21 +1,13 @@
 workspace:
-  platform: gitlab
   url: https://code.stanford.edu
   project: bil/code/2603_scicd
   cicd:
     default:
-      image: python:3.10
       before_script:
-      - pip install --upgrade pip
-      - pip install -e .[test]
+        - python3 -m pip install -e .[test]
     workflow:
       rules:
-      - if: '$$CI_PIPELINE_SOURCE == "push"'
-
-# Default task configuration
-cpu: 1
-memory: 4Gi
-retry: 0
-tags: [ "bilkube" ]
-remote:
-  root: "tmp"
+        - if: '$$CI_PIPELINE_SOURCE == "push"'
+task:
+  image: "python:3.10"
+  tags: ["bilkube"]

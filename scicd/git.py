@@ -17,7 +17,7 @@ def get_branch() -> str:
     to the local 'git branch' command.
 
     Returns:
-        The branch name string, or None if not in a git repository.
+        The branch name string, or 'unknown' if not in a git repository.
     """
     if "CI_COMMIT_REF_NAME" in os.environ:
         return os.environ["CI_COMMIT_REF_NAME"]
@@ -28,7 +28,7 @@ def get_branch() -> str:
             stderr=subprocess.DEVNULL,
         ).strip()
     except subprocess.CalledProcessError:
-        return None
+        return "unknown"
 
 
 def get_git_commit() -> str:
@@ -49,7 +49,9 @@ def get_git_commit() -> str:
     # Run git command locally
     try:
         return subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL, encoding="utf-8"
+            ["git", "rev-parse", "HEAD"],
+            stderr=subprocess.DEVNULL,
+            encoding="utf-8",
         ).strip()
     except (subprocess.CalledProcessError, FileNotFoundError):
         return "unknown"

@@ -1,0 +1,8 @@
+digraph G {
+    rankdir=LR;
+    node [shape=box, style=rounded, fontname=Arial, fontsize=10];
+    edge [fontname=Arial, fontsize=9];
+
+    {rank=same; "node_0" }
+    "node_0" [label="T1", fillcolor=lightgrey, style=filled];
+}

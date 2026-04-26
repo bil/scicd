@@ -3,7 +3,7 @@ Tests for the configuration file discovery logic.
 """
 
 import pytest
-from scicd.config import find_config_path, _ConfigManager, reset_config
+from scicd.config import find_config_path, get_workspace_config
 
 
 def test_find_config_path_env_var(tmp_path, monkeypatch):
@@ -51,25 +51,19 @@ def test_find_config_path_nested(tmp_path, monkeypatch):
 def test_find_config_path_not_found(tmp_path, monkeypatch):
     """Verify FileNotFoundError is raised if no config files are found."""
     monkeypatch.delenv("SCICD_CONFIG_PATH", raising=False)
-    # Empty directory
     monkeypatch.chdir(tmp_path)
+    assert find_config_path() is None
 
-    with pytest.raises(FileNotFoundError, match="SciCD configuration file not found"):
-        find_config_path()
-
-
-def test_config_manager_discovery(tmp_path, monkeypatch):
+def test_config_discovery(tmp_path, monkeypatch):
     """Verify that _ConfigManager actually uses the discovery logic."""
-    reset_config()
     monkeypatch.delenv("SCICD_CONFIG_PATH", raising=False)
     monkeypatch.chdir(tmp_path)
 
     config_file = tmp_path / "scicd.yaml"
     config_file.write_text(
-        "workspace: {platform: gitlab, url: x, project: y}", encoding="utf-8"
+        "workspace: {url: x, project: y}", encoding="utf-8"
     )
 
-    ws = _ConfigManager.get_workspace()
-    assert ws.platform == "gitlab"
+    ws = get_workspace_config()
+    assert ws.url == "x"
 
-    reset_config()

@@ -4,7 +4,6 @@ import os
 import re
 import pathlib
 from typing import Any, TypeVar, Union
-from collections.abc import Mapping
 from copy import deepcopy
 
 import frontmatter
@@ -17,6 +16,8 @@ T = TypeVar("T")
 
 def yml_suffix(path: Union[str, pathlib.Path]) -> str:
     """Validate and return path with YAML suffix."""
+    if pathlib.Path(path).exists:
+        return str(path)
     path = str(path)
     valid_suffixes = [".yml", ".yaml", ".yml.j2", ".yaml.j2"]
     if any(path.endswith(s) for s in valid_suffixes):
@@ -57,11 +58,13 @@ def find_includes(path: str) -> list[str]:
     return includes if isinstance(includes, list) else [includes]
 
 
-def deep_update(source: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
+def deep_update(
+    source: dict[str, Any], overrides: dict[str, Any]
+) -> dict[str, Any]:
     """Perform recursive dictionary merge."""
     source = deepcopy(source)
     for key, value in overrides.items():
-        if isinstance(value, Mapping) and value:
+        if isinstance(value, dict) and value:
             returned = deep_update(source.get(key, {}), value)
             source[key] = returned
         else:
@@ -69,7 +72,9 @@ def deep_update(source: dict[str, Any], overrides: dict[str, Any]) -> dict[str, 
     return source
 
 
-def nest_dict(flat_dict: dict[str, Any], delimiter: str = ".") -> dict[str, Any]:
+def nest_dict(
+    flat_dict: dict[str, Any], delimiter: str = "."
+) -> dict[str, Any]:
     """Convert flat dictionary with delimited keys to nested dictionary."""
     nested: dict[str, Any] = {}
     for key, value in flat_dict.items():
@@ -127,10 +132,10 @@ def load_yaml(path: str, **kwargs: Any) -> dict[str, Any]:
     return expand_vars(data)
 
 
-def slugify(text: str) -> str:
-    """Convert text to alphanumeric slug with underscores."""
-    # Replace anything that isn't a letter, number, or underscore with '_'
-    # This handles periods, dashes, spaces, and weird symbols in one pass.
-    clean = re.sub(r"[^a-zA-Z0-9_]", "_", text)
-    # Collapse multiple underscores (e.g., 'a...b' -> 'a___b' -> 'a_b')
-    return re.sub(r"_+", "_", clean).strip("_")
+# def slugify(text: str) -> str:
+#     """Convert text to alphanumeric slug with underscores."""
+#     # Replace anything that isn't a letter, number, or underscore with '_'
+#     # This handles periods, dashes, spaces, and weird symbols in one pass.
+#     clean = re.sub(r"[^a-zA-Z0-9_]", "_", text)
+#     # Collapse multiple underscores (e.g., 'a...b' -> 'a___b' -> 'a_b')
+#     return re.sub(r"_+", "_", clean).strip("_")
