@@ -5,6 +5,7 @@ Implementation for GNU Make
 from __future__ import annotations
 
 import re
+import shlex
 import subprocess
 
 from dataclasses import dataclass, field, InitVar
@@ -210,12 +211,19 @@ class MakeAdapter(BaseAdapter):
     @property
     def commands(self) -> list[str]:
         """Script command"""
-        cmd = f"make -f {self.work.makefile_path}"
+        out = []
+        safe_mkpath = shlex.quote(self.work.makefile_path)
+        cmd = f"make -f $PWD/{safe_mkpath}"
         wspace = get_workspace_config(self.config_path)
         if wspace.data_root:
+            out.append(f'mkdir -p "{wspace.data_root}"')
             cmd += f' -C "{wspace.data_root}"'
-        cmd += f" {' '.join(self.work.targets)}"  # pylint: disable=inconsistent-quotes
-        return [cmd]
+        safe_targets = [shlex.quote(target) for target in self.work.targets]
+        cmd += (
+            f" {' '.join(safe_targets)}"  # pylint: disable=inconsistent-quotes
+        )
+        out.append(cmd)
+        return out
 
     @property
     def inputs(self) -> list[str]:

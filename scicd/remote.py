@@ -29,7 +29,9 @@ def rclone_commands(
 ) -> list[str]:
     if not files:
         return []
-    includes = " ".join([f"--filter {shlex.quote(f'+ {f}')}" for f in files])
+    includes = " ".join(
+        [f"--filter {shlex.quote(f'+ {f}')}" for f in sorted(files)]
+    )
     cmd = "rclone copy"
     if direction == "pull":
         cmd += f' "{remote_root}" "{data_root}"'
