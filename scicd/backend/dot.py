@@ -37,16 +37,20 @@ def export_dag(dag: "DAG", file_path: str = "dag.dot"):
         dot_lines.append(f"    {{rank=same; {identifiers} }}")
 
         for node in current_rank_nodes:
-            color = "lightblue" if node.cfg.concurrency.method == "slice" else "lightgrey"
+            color = (
+                "lightblue"
+                if node.cfg.concurrency.method == "slice"
+                else "lightgrey"
+            )
             label = node.dot_label.replace('"', '\\"')
             stable_id = node_to_id[id(node)]
             dot_lines.append(
                 f'    "{stable_id}" [label="{label}", fillcolor={color}, style=filled];'
             )
 
-    for node in dag.nodes:
+    for node in sorted_nodes:
         child_id = node_to_id[id(node)]
-        for parent in node.deps:
+        for parent in sorted(node.deps, key=lambda x: x.dot_label):
             parent_id = node_to_id[id(parent)]
             dot_lines.append(f'    "{parent_id}" -> "{child_id}";')
 

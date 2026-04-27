@@ -204,9 +204,12 @@ class MakeAdapter(BaseAdapter):
         """The fully resolved TaskConfig for this specific work unit."""
         return self.work.rule.config
 
-    # @property
-    # def target_patterns(self) -> list[str]:
-    #     return self.work.rule.target_patterns
+    @property
+    def setup_commands(self) -> list[str]:
+        wspace = get_workspace_config(self.config_path)
+        if wspace.data_root:
+            return [f'mkdir -p "{wspace.data_root}"']
+        return super().setup_commands
 
     @property
     def commands(self) -> list[str]:
@@ -216,7 +219,6 @@ class MakeAdapter(BaseAdapter):
         cmd = f"make -f $PWD/{safe_mkpath}"
         wspace = get_workspace_config(self.config_path)
         if wspace.data_root:
-            out.append(f'mkdir -p "{wspace.data_root}"')
             cmd += f' -C "{wspace.data_root}"'
         safe_targets = [shlex.quote(target) for target in self.work.targets]
         cmd += (

@@ -63,11 +63,19 @@ class BaseAdapter(ABC):
         )
 
     @property
+    def setup_commands(self) -> list[str]:
+        return []
+
+    @property
     @abstractmethod
     def commands(self) -> list[str]:
         """
         Shell commands to run the adapter
         """
+
+    @property
+    def teardown_commands(self) -> list[str]:
+        return []
 
     @property
     @abstractmethod

@@ -80,7 +80,11 @@ class Node(BaseModel, ABC):
         wspace = get_workspace_config(self.adapters[0].config_path)
         if self.cfg.concurrency.method == "biject":
             adapter = self.adapters[0]
-            out = adapter.commands
+            out = (
+                adapter.setup_commands
+                + adapter.commands
+                + adapter.teardown_commands
+            )
             if wspace.remote_root:
                 out = (
                     scicd.remote.remote_commands(adapter.inputs, wspace, "pull")
@@ -100,11 +104,12 @@ class Node(BaseModel, ABC):
             for adapter_slice in adapter_slices:
                 slice_inputs = []
                 slice_outputs = []
-                slice_commands = []
+                slice_commands = adapter_slice[0].setup_commands
                 for adapter in adapter_slice:
                     slice_inputs.extend(adapter.inputs)
                     slice_outputs.extend(adapter.outputs)
                     slice_commands.extend(adapter.commands)
+                slice_commands += adapter_slice[0].teardown_commands
                 slice_inputs = list(set(slice_inputs))
                 slice_outputs = list(set(slice_outputs))
                 if wspace.remote_root:
@@ -220,20 +225,14 @@ class Node(BaseModel, ABC):
     def dot_label(self) -> str:
         """Generate a label showing the name and parameters."""
         if self.cfg.concurrency.method == "biject":
-            # params = self.adapters[0].params.model_dump()
-            # param_str = ", ".join([f"{k}={v}" for k, v in params.items()])
-            # if param_str:
             out = self.adapters[0].name
             if self.adapters[0].identifier != out:
                 out += f" ({self.adapters[0].identifier})"
             return out
-            # return self.adapters[0].name
 
         if self.cfg.concurrency.method == "slice":
             label_lines = [self.adapters[0].name]
             for adapter in self.adapters:
-                # params = adapter.params.model_dump()
-                # param_str = ", ".join([f"{k}={v}" for k, v in params.items()])
                 label_lines.append(f"[{adapter.identifier}]")
             return "\\n".join(label_lines)
 
