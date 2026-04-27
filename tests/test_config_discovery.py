@@ -54,16 +54,14 @@ def test_find_config_path_not_found(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     assert find_config_path() is None
 
+
 def test_config_discovery(tmp_path, monkeypatch):
     """Verify that _ConfigManager actually uses the discovery logic."""
     monkeypatch.delenv("SCICD_CONFIG_PATH", raising=False)
     monkeypatch.chdir(tmp_path)
 
     config_file = tmp_path / "scicd.yaml"
-    config_file.write_text(
-        "workspace: {url: x, project: y}", encoding="utf-8"
-    )
+    config_file.write_text("workspace: {url: x, project: y}", encoding="utf-8")
 
     ws = get_workspace_config()
     assert ws.url == "x"
-

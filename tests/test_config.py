@@ -70,11 +70,13 @@ def test_task_config_merge():
     Ensures that multiple TaskConfig sources can be layered correctly.
     """
     config = TaskConfig(cpu=2, memory="8Gi")
-    merged = config.merge({"cpu": 4, "tags": ["gpu"], "variables": {"test": "value"}})
+    merged = config.merge(
+        {"cpu": 4, "tags": ["gpu"], "variables": {"test": "value"}}
+    )
     assert merged.cpu == 4
     assert merged.memory == "8Gi"
     assert merged.tags == ["gpu"]
-    assert merged.variables == {"test": "value"} 
+    assert merged.variables == {"test": "value"}
 
 
 def test_concurrency_config():
@@ -84,6 +86,7 @@ def test_concurrency_config():
     """
     with pytest.raises(ValidationError, match="method"):
         ConcurrencyConfig(method="invalid")
+
 
 def test_workspace_config():
     """

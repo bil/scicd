@@ -57,7 +57,9 @@ def test_tag_matching():
     assert executor.name == "gpu_exec"
 
     # Superset match (should fail now)
-    with pytest.raises(ValueError, match="No executor found matching or supersetting"):
+    with pytest.raises(
+        ValueError, match="No executor found matching or supersetting"
+    ):
         get_executor(["gpu", "high_mem", "extra"])
 
     # Different order (should pass because frozenset is unordered)

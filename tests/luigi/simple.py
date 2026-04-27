@@ -2,6 +2,7 @@ import luigi
 
 # Modified from: https://luigi.readthedocs.io/en/stable/tasks.html
 
+
 class GenerateWords(luigi.Task):
 
     words = luigi.ListParameter(default=["apple", "banana", "grapefruit"])

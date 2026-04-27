@@ -15,7 +15,7 @@ from cyclopts import App, Parameter
 import scicd.config
 
 # from scicd.frontend.luigi import task as luigi_task
-from scicd.yamler import nest_dict, deep_update
+from scicd.yamler import nest_dict, deep_merge
 from scicd.adapter import BaseAdapter
 from scicd.config import DynamicModel, get_task_config
 import scicd.remote
@@ -62,9 +62,7 @@ def get_task_overrides(task: luigi.Task) -> scicd.config.TaskConfig:
     # Luigi native resources() (dict of integers)
     resources = getattr(task, "resources", {})
     if isinstance(resources, dict):
-        overrides = deep_update(
-            overrides, _normalize_luigi_resources(resources)
-        )
+        overrides = deep_merge(overrides, _normalize_luigi_resources(resources))
 
     if task.retry_count:
         overrides["retry"] = int(task.retry_count)
@@ -81,7 +79,7 @@ def get_task_overrides(task: luigi.Task) -> scicd.config.TaskConfig:
                 "`scicd` attribute on luigi tasks should be a dict!"
             )
         scicd_attr = nest_dict(scicd_attr)
-        overrides = deep_update(overrides, scicd_attr)
+        overrides = deep_merge(overrides, scicd_attr)
 
     return overrides
 

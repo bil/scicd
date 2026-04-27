@@ -14,7 +14,7 @@ import gitlab
 from dotenv import load_dotenv, dotenv_values, find_dotenv
 from cyclopts import App
 
-import scicd.yamler
+from scicd.yamler import deep_merge
 from scicd.git import get_branch
 from scicd.config import TaskConfig, get_workspace_config
 from scicd.executor import get_executor
@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 
 app = App(name="gitlab", help="Gitlab sub-command")
 
+
 def get_pat() -> str:
     if "GITLAB_PAT" in os.environ:
         return os.environ["GITLAB_PAT"]
@@ -32,8 +33,6 @@ def get_pat() -> str:
     if "GITLAB_PAT" not in os.environ:
         raise RuntimeError("Missing 'GITLAB_PAT' in environment or .env file.")
     return os.environ["GITLAB_PAT"]
-
-
 
 
 def export_dag(
@@ -64,9 +63,10 @@ def export_dag(
             f,
             sort_keys=False,
             default_flow_style=False,
-            width=float('inf')
+            width=float("inf"),
         )
     return pipeline
+
 
 def gitlab_info(cfg: TaskConfig) -> dict:
     """Resolve generic GitLab job configuration from TaskConfig."""
@@ -90,9 +90,10 @@ def gitlab_info(cfg: TaskConfig) -> dict:
         info["timeout"] = str(cfg.max_duration)
 
     if cfg.cicd:
-        info = scicd.yamler.deep_update(info, dict(cfg.cicd))
+        info = scicd.yamler.deep_merge(info, dict(cfg.cicd))
 
     return info
+
 
 def export_node(node: Node) -> dict:
     """Generate job dicts for a node"""

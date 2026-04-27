@@ -1,7 +1,7 @@
 import os
 import textwrap
 import pytest
-from scicd.config import load_yaml, TaskConfig, WorkspaceConfig 
+from scicd.config import load_yaml, TaskConfig, WorkspaceConfig
 
 
 def test_expansion_and_escaping(tmp_path):
@@ -10,7 +10,8 @@ def test_expansion_and_escaping(tmp_path):
     os.environ["MY_IMAGE"] = "python:3.10"
     os.environ["DATA_ROOT"] = "/scratch/data"
 
-    config_content = textwrap.dedent("""
+    config_content = textwrap.dedent(
+        """
         workspace:
           project: "my-project-$BUILD_TIME"
 
@@ -24,7 +25,8 @@ def test_expansion_and_escaping(tmp_path):
           BUILD_STAMP: "$BUILD_TIME"
           RUNTIME_JOB_ID: "$$CI_JOB_ID"
           ESCAPED_DOLLAR: "$$$$VAL"
-    """)
+    """
+    )
     config_file = tmp_path / "scicd.yaml"
     config_file.write_text(config_content)
 

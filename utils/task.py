@@ -14,7 +14,7 @@
 # import scicd.remote
 # from scicd.config import DynamicModel
 # from scicd.git import get_git_commit
-# from scicd.yamler import deep_update, nest_dict
+# from scicd.yamler import deep_merge, nest_dict
 
 # T = TypeVar("T", bound=luigi.Task)
 

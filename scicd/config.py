@@ -19,7 +19,7 @@ from pydantic import (
     create_model,
 )
 
-from scicd.yamler import deep_update, load_yaml
+from scicd.yamler import deep_merge, load_yaml
 
 CACHE: dict[Optional[str], dict] = {}
 
@@ -329,7 +329,7 @@ class TaskConfig(BaseModel):
         Create a new TaskConfig by merging an arbitrary dictionary into the current one.
         """
         current = self.model_dump()
-        out = deep_update(current, overrides)
+        out = deep_merge(current, overrides)
         return TaskConfig.model_validate(out)
 
 
@@ -522,9 +522,9 @@ def load_config(
 #         base = cls.get_base_task()
 #         if task and task in cls._task_overrides:
 #             # Apply static overrides from config file
-#             overrides = deep_update(overrides, cls._task_overrides[task])
+#             overrides = deep_merge(overrides, cls._task_overrides[task])
 #         # Apply variadic overrides (discovered in task implementation, for instance)
-#         overrides = deep_update(overrides, overrides)
+#         overrides = deep_merge(overrides, overrides)
 #         return base.merge(overrides)
 
 #     @classmethod
@@ -567,9 +567,9 @@ def get_task_config(
     task_dict = config_dict.get("task", {})
     if task is not None and f"task.{task}" in config_dict:
         static_overrides = config_dict[f"task.{task}"]
-        task_dict = deep_update(task_dict, static_overrides)
+        task_dict = deep_merge(task_dict, static_overrides)
     if overrides:
-        task_dict = deep_update(task_dict, overrides)
+        task_dict = deep_merge(task_dict, overrides)
     task_config = TaskConfig(**task_dict)
     return task_config
 
@@ -589,9 +589,9 @@ def get_task_config(
 #     base = cls.get_base_task(config_path)
 #     if task and task in cls._task_overrides:
 #         # Apply static overrides from config file
-#         overrides = deep_update(overrides, cls._task_overrides[task])
+#         overrides = deep_merge(overrides, cls._task_overrides[task])
 #     # Apply variadic overrides (discovered in task implementation, for instance)
-#     overrides = deep_update(overrides, overrides)
+#     overrides = deep_merge(overrides, overrides)
 #     return base.merge(overrides)
 #     return _ConfigManager.get_task(task, **overrides)
 

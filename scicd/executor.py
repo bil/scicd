@@ -48,7 +48,11 @@ class _ExecutorRegistry:
                 f"Executor file specified in SCICD_EXECUTORS_PATH not found: {env_path}"
             )
 
-        for executor_file in ["scicd_executors.py", ".scicd_executors.py", ".scicd/executors.py"]:
+        for executor_file in [
+            "scicd_executors.py",
+            ".scicd_executors.py",
+            ".scicd/executors.py",
+        ]:
             path = Path(executor_file)
             if path.exists():
                 cls._load_from_path(path)
@@ -64,8 +68,9 @@ class _ExecutorRegistry:
     @classmethod
     def _load_from_path(cls, path: Path):
         spec = importlib.util.spec_from_file_location(
-        """Load a Python module from a disk path and trigger registration."""
-            "_executors", path
+            """Load a Python module from a disk path and trigger registration."""
+            "_executors",
+            path,
         )
         if spec and spec.loader:
             module = importlib.util.module_from_spec(spec)
@@ -98,8 +103,10 @@ def register_executor(tags: Iterable[str], name: Optional[str] = None):
 
     return decorator
 
+
 def get_registry() -> list[Executor]:
     return _ExecutorRegistry.get_registry()
+
 
 def get_executor(tags: Iterable[str]) -> Executor:
     """

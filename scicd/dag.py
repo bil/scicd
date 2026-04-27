@@ -24,7 +24,9 @@ class DAG:
         self.config_path = config_path
 
     def export(
-        self, backend: Literal["gitlab", "dot"] = "gitlab", file_path: str = None
+        self,
+        backend: Literal["gitlab", "dot"] = "gitlab",
+        file_path: str = None,
     ):
         if backend == "gitlab":
             if file_path is None:
@@ -115,9 +117,7 @@ def _group_into_nodes(
                     for adpt in adapters
                     for dep in adpt.deps
                 }
-                node = Node(
-                    adapters=adapters, rank=rank, deps=list(deps)
-                )
+                node = Node(adapters=adapters, rank=rank, deps=list(deps))
                 nodes.append(node)
                 for adpt in adapters:
                     id_to_node[adpt.identifier] = node

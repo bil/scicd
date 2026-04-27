@@ -37,7 +37,6 @@ def test_luigi_adapter_properties(mocker):
     task = DummyTask(date="2024-01-01")
     adapter = LuigiAdapter(task)
 
-
     assert adapter.name == "DummyTask"
     assert adapter.params.model_dump() == {"date": "2024-01-01"}
     assert "file1.txt" in adapter.outputs
