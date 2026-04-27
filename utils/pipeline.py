@@ -4,11 +4,6 @@ import subprocess
 from pathlib import Path
 import luigi
 
-# # Project-standard base for internal CI
-# InternalTask = augment_task(
-#     name="SciTask", path_hash="tmp/hashes", path_cascade=None, hash_commit=True
-# )
-
 
 class RunTests(luigi.Task):
     """Run the pytest suite on a specific Python version."""
@@ -20,7 +15,6 @@ class RunTests(luigi.Task):
         """Dynamic configuration to override the container image."""
         # This can only be done using biject concurrency!
         # Otherwise, a task family must share a single set of resources
-        # allocated to a "worker" node
         return {
             "image": f"python:{self.python_version}",
             "tags": ["bilkube"],
@@ -29,10 +23,11 @@ class RunTests(luigi.Task):
     def run(self):
         """Execute pytest."""
         print(f"Running pytest suite on Python {self.python_version}...")
-        subprocess.run(["pytest"], check=True)
+        out = subprocess.run(["pytest"], check=True, capture_output=True)
         print("Pytest suite completed successfully.")
+        self.output().makedirs()
         with open(self.output().path, "w", encoding="utf-8") as f:
-            f.write("Done!")
+            f.write(out.stdout.decode("utf-8"))
 
     def output(self):
         return luigi.LocalTarget(Path(self.python_version) / "tested.txt")

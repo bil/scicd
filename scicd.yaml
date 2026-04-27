@@ -4,10 +4,7 @@ workspace:
   cicd:
     default:
       before_script:
-        - python3 -m pip install -e .[test]
+        - python3 -m pip install -e .[dev]
     workflow:
       rules:
         - if: '$$CI_PIPELINE_SOURCE == "push"'
-task:
-  image: "python:3.10"
-  tags: ["bilkube"]

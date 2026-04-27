@@ -1,28 +1,68 @@
 default:
   before_script:
-  - pip install --upgrade pip
-  - pip install -e .[test]
+    - python3 -m pip install -e .[dev]
 workflow:
   rules:
-  - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "push"
 stages:
-- stage_0
-- stage_1
-GenerateWords:words=["apple","banana","grapefruit"]:
-  image: python:3.10
+  - stage_0
+  - stage_1
+RunTests:python_version=3.9:
+  image: python:3.9
   tags:
-  - bilkube
+    - bilkube
   stage: stage_0
   needs: []
   script:
-  - PYTHONPATH=. luigi --module tests.luigi.simple GenerateWords --GenerateWords-words='["apple",
-    "banana", "grapefruit"]' --local-scheduler
-CountLetters:
+    - PYTHONPATH=. luigi --module utils.pipeline RunTests --RunTests-python_version=3.9 --local-scheduler
+RunTests:python_version=3.10:
   image: python:3.10
   tags:
-  - bilkube
+    - bilkube
+  stage: stage_0
+  needs: []
+  script:
+    - PYTHONPATH=. luigi --module utils.pipeline RunTests --RunTests-python_version=3.10 --local-scheduler
+RunTests:python_version=3.11:
+  image: python:3.11
+  tags:
+    - bilkube
+  stage: stage_0
+  needs: []
+  script:
+    - PYTHONPATH=. luigi --module utils.pipeline RunTests --RunTests-python_version=3.11 --local-scheduler
+RunTests:python_version=3.12:
+  image: python:3.12
+  tags:
+    - bilkube
+  stage: stage_0
+  needs: []
+  script:
+    - PYTHONPATH=. luigi --module utils.pipeline RunTests --RunTests-python_version=3.12 --local-scheduler
+RunTests:python_version=3.13:
+  image: python:3.13
+  tags:
+    - bilkube
+  stage: stage_0
+  needs: []
+  script:
+    - PYTHONPATH=. luigi --module utils.pipeline RunTests --RunTests-python_version=3.13 --local-scheduler
+RunTests:python_version=3.14:
+  image: python:3.14
+  tags:
+    - bilkube
+  stage: stage_0
+  needs: []
+  script:
+    - PYTHONPATH=. luigi --module utils.pipeline RunTests --RunTests-python_version=3.14 --local-scheduler
+Pipeline:
   stage: stage_1
   needs:
-  - GenerateWords:words=["apple","banana","grapefruit"]
+    - RunTests:python_version=3.10
+    - RunTests:python_version=3.11
+    - RunTests:python_version=3.12
+    - RunTests:python_version=3.13
+    - RunTests:python_version=3.14
+    - RunTests:python_version=3.9
   script:
-  - PYTHONPATH=. luigi --module tests.luigi.simple CountLetters --local-scheduler
+    - PYTHONPATH=. luigi --module utils.pipeline Pipeline --local-scheduler

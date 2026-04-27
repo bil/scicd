@@ -146,7 +146,7 @@ class TaskConfig(BaseModel):
 
     tags: list[str] = []
 
-    cpu: Optional[int] = None
+    cpu: Optional[int] = Field(default=None, gt=0)
     memory: Optional[str] = None
 
     disk: Optional[str] = None
@@ -358,9 +358,7 @@ class WorkspaceConfig(BaseModel):
                     f"the remote root must start with one of {self._remote_protocols}"
                 )
             if self.data_root is None:
-                raise ValueError(
-                    "data_root must be set alongside remote_root"
-                )
+                raise ValueError("data_root must be set alongside remote_root")
         return self
 
 

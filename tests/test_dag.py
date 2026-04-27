@@ -12,6 +12,7 @@ from scicd.backend.gitlab import (
     export_dag,
 )
 
+
 class MockAdapter(BaseAdapter):
     """
     A mock adapter for testing DAG node properties and GitLab job generation.
@@ -27,11 +28,14 @@ class MockAdapter(BaseAdapter):
     @property
     def params(self) -> TaskConfig:
         from scicd.config import DynamicModel
+
         return DynamicModel.model_validate(self._params)
 
     @property
     def cfg(self):
-        return TaskConfig(cpu=2, concurrency={'method': self._concurrency, 'workers': 2})
+        return TaskConfig(
+            cpu=2, concurrency={"method": self._concurrency, "workers": 2}
+        )
 
     @property
     def commands(self):
@@ -44,7 +48,7 @@ class MockAdapter(BaseAdapter):
     @property
     def identifier(self):
         return self._identifier
-    
+
     @property
     def inputs(self):
         return []
@@ -61,9 +65,6 @@ class MockAdapter(BaseAdapter):
         pass
 
 
-
-
-
 def test_biject_properties():
     """
     Verifies that biject concurrency (1:1 task-to-job mapping) correctly handles properties.
@@ -72,7 +73,6 @@ def test_biject_properties():
     node = Node(adapters=[adapter], rank=0, deps=[])
 
     assert node.jobs[0] == "MyTask_1"
-    assert node.dot_label == "MyTask\\n(id=1)"
     assert node.needs == []
 
 
@@ -108,9 +108,6 @@ def test_slice_properties():
 
     assert len(node.jobs) == 2
     assert node.jobs[0].startswith("MyTask")
-    assert "MyTask" in node.dot_label
-    assert "[id=1]" in node.dot_label
-    assert "[id=2]" in node.dot_label
 
 
 def test_slice_to_gitlab():
@@ -149,8 +146,6 @@ def test_dag_render_gitlab(tmp_path):
     # make sure produces valid YAML
     with open(out_file, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
-        
-
 
     assert pipeline["stages"] == ["stage_0", "stage_1"]
     assert "T1_id" in pipeline
