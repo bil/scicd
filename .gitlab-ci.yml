@@ -14,7 +14,7 @@ RunTests:python_version=3.9:
   stage: stage_0
   needs: []
   script:
-    - PYTHONPATH=. luigi --module utils.pipeline RunTests --RunTests-python_version=3.9 --local-scheduler
+    - PYTHONPATH=. luigi --module utils.pipeline RunTests --RunTests-python-version=3.9 --local-scheduler
 RunTests:python_version=3.10:
   image: python:3.10
   tags:
@@ -22,7 +22,7 @@ RunTests:python_version=3.10:
   stage: stage_0
   needs: []
   script:
-    - PYTHONPATH=. luigi --module utils.pipeline RunTests --RunTests-python_version=3.10 --local-scheduler
+    - PYTHONPATH=. luigi --module utils.pipeline RunTests --RunTests-python-version=3.10 --local-scheduler
 RunTests:python_version=3.11:
   image: python:3.11
   tags:
@@ -30,7 +30,7 @@ RunTests:python_version=3.11:
   stage: stage_0
   needs: []
   script:
-    - PYTHONPATH=. luigi --module utils.pipeline RunTests --RunTests-python_version=3.11 --local-scheduler
+    - PYTHONPATH=. luigi --module utils.pipeline RunTests --RunTests-python-version=3.11 --local-scheduler
 RunTests:python_version=3.12:
   image: python:3.12
   tags:
@@ -38,7 +38,7 @@ RunTests:python_version=3.12:
   stage: stage_0
   needs: []
   script:
-    - PYTHONPATH=. luigi --module utils.pipeline RunTests --RunTests-python_version=3.12 --local-scheduler
+    - PYTHONPATH=. luigi --module utils.pipeline RunTests --RunTests-python-version=3.12 --local-scheduler
 RunTests:python_version=3.13:
   image: python:3.13
   tags:
@@ -46,7 +46,7 @@ RunTests:python_version=3.13:
   stage: stage_0
   needs: []
   script:
-    - PYTHONPATH=. luigi --module utils.pipeline RunTests --RunTests-python_version=3.13 --local-scheduler
+    - PYTHONPATH=. luigi --module utils.pipeline RunTests --RunTests-python-version=3.13 --local-scheduler
 RunTests:python_version=3.14:
   image: python:3.14
   tags:
@@ -54,7 +54,7 @@ RunTests:python_version=3.14:
   stage: stage_0
   needs: []
   script:
-    - PYTHONPATH=. luigi --module utils.pipeline RunTests --RunTests-python_version=3.14 --local-scheduler
+    - PYTHONPATH=. luigi --module utils.pipeline RunTests --RunTests-python-version=3.14 --local-scheduler
 Pipeline:
   stage: stage_1
   needs:

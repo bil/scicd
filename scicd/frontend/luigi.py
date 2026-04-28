@@ -136,12 +136,22 @@ class LuigiAdapter(BaseAdapter):
     def commands(self) -> list[str]:
         """Generate safe shell commands with properly escaped arguments."""
         # Build CLI parameters with proper escaping
+        param_objects = dict(self.work.get_params())
         cli_params = []
         for k, v in self.work.to_str_params().items():
-            # Use shlex.quote to safely escape each value
-            param_name = f"--{self.name}-{k}"
-            param_value = shlex.quote(str(v))
-            cli_params.append(f"{param_name}={param_value}")
+            k_shell = k.replace("_", "-")
+            param_obj = param_objects.get(k)
+            if (
+                isinstance(param_obj, luigi.BoolParameter)
+                and param_obj.parsing == luigi.BoolParameter.IMPLICIT_PARSING
+            ):
+                if v == "True":
+                    cli_params.append(f"--{self.name}-{k_shell}")
+            else:
+                # Use shlex.quote to safely escape each value
+                param_name = f"--{self.name}-{k_shell}"
+                param_value = shlex.quote(str(v))
+                cli_params.append(f"{param_name}={param_value}")
 
         # Escape module name as well (in case it comes from user input)
         safe_module = shlex.quote(self.module)

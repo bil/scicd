@@ -1,8 +1,5 @@
 """
-CLI interface for scicd using Cyclopts.
-
-This module defines all user-facing commands for building pipelines, running tasks
-locally, and inspecting configuration state.
+CLI interface for SciCD.
 """
 
 import os
@@ -12,20 +9,14 @@ from typing import Annotated, Optional, Literal
 
 import rich
 from cyclopts import App, Parameter
-
+from dotenv import load_dotenv
 
 import scicd.config
 import scicd.executor
 
 sys.path.insert(0, os.getcwd())
-
-# App initialization with clear metadata
+load_dotenv(".env")
 app = App(name="scicd", help="CI/CD execution for computational DAGs.")
-# app.command(luigi_app)
-# app.command(make_app)
-# app.command(gitlab_app)
-
-# Ensure current project directory is in path for module discovery
 
 
 @app.command(name="luigi")

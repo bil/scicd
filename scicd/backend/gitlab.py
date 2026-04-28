@@ -11,7 +11,6 @@ from typing import Any, Optional, TYPE_CHECKING
 import yaml
 import rich
 import gitlab
-from dotenv import load_dotenv, dotenv_values, find_dotenv
 from cyclopts import App
 
 from scicd.yamler import deep_merge
@@ -29,10 +28,7 @@ app = App(name="gitlab", help="Gitlab sub-command")
 def get_pat() -> str:
     if "GITLAB_PAT" in os.environ:
         return os.environ["GITLAB_PAT"]
-    load_dotenv(".env")
-    if "GITLAB_PAT" not in os.environ:
-        raise RuntimeError("Missing 'GITLAB_PAT' in environment or .env file.")
-    return os.environ["GITLAB_PAT"]
+    raise RuntimeError("Missing 'GITLAB_PAT' in environment file.")
 
 
 def export_dag(

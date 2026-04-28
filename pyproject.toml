@@ -14,9 +14,7 @@ requires-python = ">=3.9"
 dependencies = [
     "python-dotenv",
     "python-gitlab",
-    "python-frontmatter",
     "PyYAML",
-    "Jinja2",
     "cyclopts",
     "rich",
     "requests",
@@ -35,9 +33,6 @@ classifiers = [
 
 [project.scripts]
 scicd = "scicd.cli:app"
-scicd-luigi = "scicd.frontend.luigi:app"
-scicd-make = "scicd.frontend.make:app"
-scicd-gitlab = "scicd.backent.gitlab:app"
 
 [project.urls]
 Homepage = "https://bil.stanford.edu/"
