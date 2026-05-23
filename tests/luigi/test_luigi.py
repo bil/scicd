@@ -2,9 +2,7 @@
 Tests for the LuigiAdapter class
 """
 
-import json
 import luigi
-import scicd.config
 from scicd.frontend.luigi import LuigiAdapter
 from scicd.config import TaskConfig
 

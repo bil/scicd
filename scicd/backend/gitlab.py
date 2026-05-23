@@ -2,21 +2,17 @@
 
 from __future__ import annotations
 import os
-import json
-import shlex
 from pathlib import Path
 from copy import deepcopy
 from typing import Any, Optional, TYPE_CHECKING
 
 import yaml
-import rich
 import gitlab
 from cyclopts import App
 
-from scicd.yamler import deep_merge
 from scicd.git import get_branch
 from scicd.config import TaskConfig, get_workspace_config
-from scicd.executor import get_executor
+import scicd.yamler
 
 if TYPE_CHECKING:
     from scicd.dag import DAG
@@ -130,9 +126,7 @@ def lint(
     """Validate GitLab CI/CD YAML syntax using the GitLab Lint API."""
     yaml_path = Path(file_path)
     if not yaml_path.exists():
-        raise FileNotFoundError(
-            f"Cannot find pipeline file at '{yaml_path.resolve()}'"
-        )
+        raise FileNotFoundError(f"Cannot find pipeline file at '{yaml_path.resolve()}'")
 
     with open(yaml_path, "r", encoding="utf-8") as f:
         yaml_content = f.read()
@@ -210,9 +204,7 @@ def run(
     if formatted_vars:
         print(f"Injecting {formatted_vars} into pipeline")
 
-    p = gl_project.pipelines.create(
-        {"ref": branch, "variables": formatted_vars}
-    )
+    p = gl_project.pipelines.create({"ref": branch, "variables": formatted_vars})
 
     print(f"Pipeline {p.id} triggered on branch '{branch}'")
     print(f"View here: {p.web_url}")

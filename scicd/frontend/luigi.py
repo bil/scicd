@@ -55,7 +55,7 @@ def _normalize_luigi_resources(resources: dict[str, int]) -> dict[str, Any]:
     return normalized
 
 
-def get_task_overrides(task: luigi.Task) -> scicd.config.TaskConfig:
+def get_task_overrides(task: luigi.Task) -> dict[str, Any]:
     """Extract and resolve TaskConfig for a Luigi task instance."""
     overrides: dict[str, Any] = {}
 
@@ -75,9 +75,7 @@ def get_task_overrides(task: luigi.Task) -> scicd.config.TaskConfig:
     if hasattr(task, "scicd"):
         scicd_attr = getattr(task, "scicd")
         if not isinstance(scicd_attr, dict):
-            raise ValueError(
-                "`scicd` attribute on luigi tasks should be a dict!"
-            )
+            raise ValueError("`scicd` attribute on luigi tasks should be a dict!")
         scicd_attr = nest_dict(scicd_attr)
         overrides = deep_merge(overrides, scicd_attr)
 
@@ -87,10 +85,8 @@ def get_task_overrides(task: luigi.Task) -> scicd.config.TaskConfig:
 class LuigiAdapter(BaseAdapter):
     """Adapter for transforming Luigi tasks into DAG nodes."""
 
-    def __init__(
-        self, work: luigi.Task, config_path: Optional[str] = None
-    ) -> None:
-        super().__init__(work)
+    def __init__(self, work: luigi.Task, config_path: Optional[str] = None) -> None:
+        super().__init__(work, config_path)
 
     @property
     def name(self) -> str:
@@ -153,7 +149,7 @@ class LuigiAdapter(BaseAdapter):
                 param_value = shlex.quote(str(v))
                 cli_params.append(f"{param_name}={param_value}")
 
-        # Escape module name as well (in case it comes from user input)
+        # Escape module name as well
         safe_module = shlex.quote(self.module)
         safe_task_name = shlex.quote(self.name)
 
@@ -167,6 +163,8 @@ class LuigiAdapter(BaseAdapter):
             *cli_params,
             "--local-scheduler",
         ]
+        if self.cfg.flags is not None:
+            cmd_parts += self.cfg.flags
 
         # Join with spaces (already quoted, so safe)
         cmd = " ".join(cmd_parts)
@@ -230,7 +228,7 @@ class LuigiAdapter(BaseAdapter):
     def deps(self) -> list[LuigiAdapter]:
         """Return task deps as adapters"""
         task_deps = luigi.task.flatten(self.work.requires())
-        return [LuigiAdapter(task) for task in task_deps]
+        return [LuigiAdapter(task, self.config_path) for task in task_deps]
 
 
 def load_luigi_task(module: str, task: str, **kwargs) -> luigi.Task:
@@ -259,6 +257,9 @@ def build(
     file_path: Annotated[Optional[str], Parameter(alias="-o")] = None,
     **kwargs,
 ) -> None:
+    """
+    Build DAG from luigi workflow.
+    """
     target_task = load_luigi_task(module, task, **kwargs)
     target_adapter = LuigiAdapter(target_task, config_path)
     dag = scicd.dag.build(target_adapter)

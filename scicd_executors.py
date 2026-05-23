@@ -1,5 +1,3 @@
-import os
-from dotenv import load_dotenv
 from typing import Dict
 
 from scicd.executor import register_executor
@@ -46,5 +44,6 @@ def gke_autopilot(cfg: TaskConfig) -> Dict[str, str]:
 @register_executor(tags=["worm"])
 def docker(
     cfg: TaskConfig,
-) -> Dict[str, str]:  # pylint: disable=unused-argument
+) -> Dict[str, str]:
+    _ = cfg
     return {}

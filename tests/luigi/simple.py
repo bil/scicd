@@ -4,8 +4,7 @@ import luigi
 
 
 class GenerateWords(luigi.Task):
-
-    words = luigi.ListParameter(default=["apple", "banana", "grapefruit"])
+    words = luigi.ListParameter(default=("apple", "banana", "grapefruit"))
 
     def output(self):
         return luigi.LocalTarget("tmp/vanilla/words.txt")
@@ -18,7 +17,6 @@ class GenerateWords(luigi.Task):
 
 
 class CountLetters(luigi.Task):
-
     def requires(self):
         return GenerateWords()
 

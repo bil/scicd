@@ -80,18 +80,12 @@ class Node(BaseModel, ABC):
         wspace = get_workspace_config(self.adapters[0].config_path)
         if self.cfg.concurrency.method == "biject":
             adapter = self.adapters[0]
-            out = (
-                adapter.setup_commands
-                + adapter.commands
-                + adapter.teardown_commands
-            )
+            out = adapter.setup_commands + adapter.commands + adapter.teardown_commands
             if wspace.remote_root:
                 out = (
                     scicd.remote.remote_commands(adapter.inputs, wspace, "pull")
                     + out
-                    + scicd.remote.remote_commands(
-                        adapter.outputs, wspace, "push"
-                    )
+                    + scicd.remote.remote_commands(adapter.outputs, wspace, "push")
                 )
             out = [out]
             return out
@@ -114,13 +108,9 @@ class Node(BaseModel, ABC):
                 slice_outputs = list(set(slice_outputs))
                 if wspace.remote_root:
                     slice_commands = (
-                        scicd.remote.remote_commands(
-                            slice_inputs, wspace, "pull"
-                        )
+                        scicd.remote.remote_commands(slice_inputs, wspace, "pull")
                         + slice_commands
-                        + scicd.remote.remote_commands(
-                            slice_outputs, wspace, "push"
-                        )
+                        + scicd.remote.remote_commands(slice_outputs, wspace, "push")
                     )
                 out.append(slice_commands)
             return out
@@ -196,9 +186,7 @@ class Node(BaseModel, ABC):
     def check_adapters(self) -> Node:
         if not self.adapters:
             raise ValueError("Node has no adapters!")
-        if (self.cfg.concurrency.method == "biject") and (
-            len(self.adapters) != 1
-        ):
+        if (self.cfg.concurrency.method == "biject") and (len(self.adapters) != 1):
             raise ValueError(
                 f"Biject concurrency expects 1 adapter per node, received: {len(self.adapters)}."
             )
@@ -207,9 +195,7 @@ class Node(BaseModel, ABC):
         ):
             n = len(self.adapters)
             m = self.cfg.concurrency.workers
-            raise ValueError(
-                f"Slice concurrency received {n} adapters (< {m} workers)"
-            )
+            raise ValueError(f"Slice concurrency received {n} adapters (< {m} workers)")
 
         return self
 
@@ -217,9 +203,7 @@ class Node(BaseModel, ABC):
         if backend == "gitlab":
             return scicd.backend.gitlab.export_node(self)
         else:
-            raise NotImplementedError(
-                f"Node export not implemented for {backend}"
-            )
+            raise NotImplementedError(f"Node export not implemented for {backend}")
 
     @property
     def dot_label(self) -> str:

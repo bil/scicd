@@ -4,12 +4,13 @@ CLI interface for SciCD.
 
 import os
 import sys
-from typing import Annotated, Optional, Literal
+from typing import Annotated, Optional
 
 
 import rich
 from cyclopts import App, Parameter
 from dotenv import load_dotenv
+from pydantic import BaseModel
 
 import scicd.config
 import scicd.executor
@@ -17,60 +18,47 @@ import scicd.executor
 sys.path.insert(0, os.getcwd())
 load_dotenv(".env")
 app = App(name="scicd", help="CI/CD execution for computational DAGs.")
-
-
-@app.command(name="luigi")
-def luigi_cmd(*args, **kwargs):
-    """
-    Luigi sub-application. (Requires 'luigi' installation)
-    """
-    try:
-        from scicd.frontend.luigi import app as luigi_app
-
-        return luigi_app(sys.argv[2:])
-    except ImportError:
-        rich.print(
-            "[red]Error:[/red] Luigi dependencies missing. Install via `pip install scicd[luigi]`"
-        )
-        sys.exit(1)
-
-
-@app.command(name="make")
-def make_cmd(*args, **kwargs):
-    """
-    GNU Make sub-application.
-    """
-    try:
-        from scicd.frontend.make import app as make_app
-
-        return make_app(sys.argv[2:])
-    except ImportError:
-        rich.print("[red]Error:[/red] Make dependencies missing.")
-        sys.exit(1)
-
-
-@app.command(name="gitlab")
-def gitlab_cmd(*args, **kwargs):
-    """
-    Gitlab sub-application.
-    """
-    try:
-        from scicd.backend.gitlab import app as gitlab_app
-
-        return gitlab_app(sys.argv[2:])
-    except ImportError:
-        rich.print("[red]Error:[/red] Gitlab dependencies missing.")
-        sys.exit(1)
+app.command("scicd.frontend.luigi:app", name="luigi")
+app.command("scicd.frontend.make:app", name="make")
+app.command("scicd.backend.gitlab:app", name="gitlab")
 
 
 @app.command()
-def config(config_path: Annotated[Optional[str], Parameter(alias="-c")] = None):
+def config(
+    config_path: Annotated[
+        Optional[str],
+        Parameter(alias="-c"),
+    ] = None,
+    key: Annotated[Optional[str], Parameter(alias="-k")] = None,
+):
     """
-    Show static configuration (before inline overrides)
+    Show configuration before inline overrides
     """
-    rich.print(scicd.config.get_workspace_config(config_path))
+    workspace = scicd.config.get_workspace_config(config_path)
+    task = scicd.config.get_task_config(config_path)
+    if key is not None:
+        parts = key.split(sep=".")
+        if parts[0] in workspace.model_fields:
+            config = workspace
+        else:
+            if parts[0] not in task.model_fields:
+                raise ValueError(
+                    f"For key {key}, could not find {parts[0]} in workspace or task configuration"
+                )
+            config = task
+        while parts:
+            if isinstance(config, BaseModel):
+                config = config.model_dump()
+            config = config[parts[0]]
+            parts = parts[1:]
+        if config is not None:
+            print(config)
+        return
+
+    rich.print("[bold]Workspace:[/bold]")
+    rich.print(workspace)
     rich.print("[bold]Default Task:[/bold]")
-    rich.print(scicd.config.get_task_config(config_path))
+    rich.print(task)
 
 
 @app.command()

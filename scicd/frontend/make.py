@@ -8,7 +8,7 @@ import re
 import shlex
 import subprocess
 
-from dataclasses import dataclass, field, InitVar
+from dataclasses import dataclass, InitVar
 from typing import Optional, Annotated
 
 from cyclopts import App, Parameter
@@ -85,12 +85,12 @@ class Rule:
         # initialize map
         if prereq_patterns is None:
             prereq_patterns = []
-        self.prereq_map = {
-            target: prereq_patterns for target in target_patterns
-        }
+        if target_patterns is None:
+            target_patterns = []
+        self.prereq_map = {target: prereq_patterns for target in target_patterns}
 
     def __repr__(self):
-        return f"<Rule: {self.name} " f"Mapping: {self.prereq_map}"
+        return f"<Rule: {self.name} Mapping: {self.prereq_map}"
 
     def match_stem(self, value: str) -> Optional[str]:
         if not self.implicit:
@@ -124,11 +124,11 @@ def find_rule_by_line(rules: list[Rule], line: int) -> Optional[Rule]:
     return None
 
 
-def find_rule(rules: list[Rule], value) -> Optional[Rule]:
+def find_rule(rules: list[Rule], value) -> Rule:
     for rule in rules:
         if rule.match(value):
             return rule
-    return None
+    raise ValueError(f"No rule found for {value}!")
 
 
 @dataclass
@@ -166,9 +166,7 @@ class MakeAdapter(BaseAdapter):
     Make adapter
     """
 
-    def __init__(
-        self, work: MakeWork, config_path: Optional[str] = None
-    ) -> None:
+    def __init__(self, work: MakeWork, config_path: Optional[str] = None) -> None:
         """
         Initialize the adapter.
         """
@@ -195,7 +193,7 @@ class MakeAdapter(BaseAdapter):
     def params(self) -> DynamicModel:
         """Return procedure parameters as a flexible Pydantic model."""
         if self.work.stem:
-            return DynamicModel(stem=self.work.stem)
+            return DynamicModel(stem=self.work.stem)  # ty: ignore[unknown-argument]
         else:
             return DynamicModel()
 
@@ -221,9 +219,11 @@ class MakeAdapter(BaseAdapter):
         if wspace.data_root:
             cmd += f' -C "{wspace.data_root}"'
         safe_targets = [shlex.quote(target) for target in self.work.targets]
-        cmd += (
-            f" {' '.join(safe_targets)}"  # pylint: disable=inconsistent-quotes
-        )
+        cmd += " "
+        cmd += " ".join(safe_targets)
+        if self.cfg.flags is not None:
+            cmd += " "
+            cmd += " ".join(self.cfg.flags)
         out.append(cmd)
         return out
 
@@ -273,14 +273,14 @@ def get_db_trace(
         targets = []
     for target in targets:
         db_cmd.append(target)
-    db_trace = subprocess.run(
-        db_cmd, check=True, capture_output=True
-    ).stdout.decode("utf-8")
+    db_trace = subprocess.run(db_cmd, check=True, capture_output=True).stdout.decode(
+        "utf-8"
+    )
     return db_trace
 
 
 def extract_rules_from_db(
-    db_text: str, makefile_path: str = "Makefile", config_path: str = None
+    db_text: str, makefile_path: str = "Makefile", config_path: str | None = None
 ) -> list[Rule]:
     """
     Prases a `make -p` database.
@@ -289,18 +289,14 @@ def extract_rules_from_db(
     rules: list[Rule] = []
 
     current_target = None
-    current_prereqs = None
+    current_prereqs: list[str] = []
     started = False
     not_a_target = False
     # Regex to catch: "(from 'Makefile', line 12)"
-    re_line_num = re.compile(
-        rf"\(from '{re.escape(makefile_path)}', line (\d+)\)"
-    )
+    re_line_num = re.compile(rf"\(from '{re.escape(makefile_path)}', line (\d+)\)")
     re_also_makes = re.compile(r"Also makes: (\S+)")
     re_not_a_target = re.compile(r"Not a target:")
-    re_phony_target = re.compile(
-        re.escape("Phony target (prerequisite of .PHONY).")
-    )
+    re_phony_target = re.compile(re.escape("Phony target (prerequisite of .PHONY)."))
 
     for line in db_text.splitlines():
         # Skip dry run outpu
@@ -401,33 +397,34 @@ def extract_rules_from_db(
                     current_target = None
                     continue
 
-                matched_rule = find_rule(rules, current_target)
-                if matched_rule is not None:
-                    if matched_rule.line is not None:
-                        assert matched_rule.line == line_number
-                    else:
-                        matched_rule.line = line_number
-                    current_target = None
-                    continue
+                try:
+                    matched_rule = find_rule(rules, current_target)
+                except ValueError:
+                    matched_rule = find_rule_by_line(rules, line_number)
 
-                matched_rule = find_rule_by_line(rules, line_number)
+                    # this happens for multi-target rules that are split
+                    if matched_rule is not None:
+                        matched_rule.add_pattern(current_target, current_prereqs)
+                        current_target = None
+                        continue
 
-                # this happens for multi-target rules that are split
-                if matched_rule is not None:
-                    matched_rule.add_pattern(current_target, current_prereqs)
-                    current_target = None
-                    continue
-
-                rules.append(
-                    Rule(
-                        name=current_target,
-                        target_patterns=[current_target],
-                        prereq_patterns=current_prereqs,
-                        line=line_number,
+                    rules.append(
+                        Rule(
+                            name=current_target,
+                            target_patterns=[current_target],
+                            prereq_patterns=current_prereqs,
+                            line=line_number,
+                        )
                     )
-                )
+                    current_target = None
+                    continue
+                if matched_rule.line is not None:
+                    assert matched_rule.line == line_number
+                else:
+                    matched_rule.line = line_number
                 current_target = None
                 continue
+
     for rule in rules:
         rule.config = extract_rule_config(rule, makefile_path, config_path)
         rule.config_path = config_path
@@ -444,9 +441,9 @@ def extract_rule_config(
         with open(makefile_path, "r", encoding="utf-8") as f:
             lines = f.readlines()
         rule_lines = lines[rule.line :]
-        for l in rule_lines:
-            if "# scicd:" in l:
-                _, config_str = l.split("# scicd", maxsplit=1)
+        for line in rule_lines:
+            if "# scicd:" in line:
+                _, config_str = line.split("# scicd", maxsplit=1)
                 config_str = config_str.strip()
                 parts = config_str.split()
                 for part in parts:
@@ -478,9 +475,7 @@ def parse_make_trace(
     """Parses a make -Bnd trace into a wired graph of MakeAdapters."""
     works: list[MakeWork] = []
     adapters: list[MakeAdapter] = []
-    stack: list[MakeAdapter] = (
-        []
-    )  # Keeps track of the current parent-child chain
+    stack: list[MakeAdapter] = []  # Keeps track of the current parent-child chain
 
     # Pre-compile regexes for speed
     # name is enclosed with single quotes
@@ -489,8 +484,6 @@ def parse_make_trace(
     re_pruning = re.compile(r"Pruning file '([^']+)'")
     re_finished = re.compile(r"Finished prerequisites of target file '([^']+)'")
 
-    target_name: Optional[str] = None
-    current_adapter: Optional[MakeAdapter] = None
     root: Optional[MakeAdapter] = None
 
     for line in make_trace.splitlines():
@@ -501,8 +494,9 @@ def parse_make_trace(
             if target_name == makefile_path:
                 continue
 
-            rule = find_rule(rules, target_name)
-            if rule is None:
+            try:
+                rule = find_rule(rules, target_name)
+            except ValueError:
                 continue
             if find_work(target_name, works) is None:
                 if rule.implicit:
@@ -512,9 +506,7 @@ def parse_make_trace(
                     targets = fill_patterns(list(rule.prereq_map.keys()), stem)
                     outputs = targets
                     # all targets have same prereqs
-                    prereqs = fill_patterns(
-                        list(rule.prereq_map.values())[0], stem
-                    )
+                    prereqs = fill_patterns(list(rule.prereq_map.values())[0], stem)
                 elif rule.grouped:
                     stem = None
                     targets = list(rule.prereq_map.keys())
@@ -533,9 +525,7 @@ def parse_make_trace(
                     # prereqs = rule.prereq_patterns
 
                 inputs = [
-                    prereq
-                    for prereq in prereqs
-                    if not find_rule(rules, prereq).phony
+                    prereq for prereq in prereqs if not find_rule(rules, prereq).phony
                 ]
 
                 work = MakeWork(
@@ -579,9 +569,11 @@ def parse_make_trace(
             # If there is a parent on the stack, link them!
             if stack:
                 parent = stack[-1]
+                assert isinstance(current_adapter, MakeAdapter)
                 parent.add_dep(current_adapter)
 
             # Push current target to the top of the stack
+            assert isinstance(current_adapter, MakeAdapter)
             stack.append(current_adapter)
             continue
 

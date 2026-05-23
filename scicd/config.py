@@ -16,7 +16,6 @@ from pydantic import (
     ConfigDict,
     model_validator,
     field_validator,
-    create_model,
 )
 
 from scicd.yamler import deep_merge, load_yaml
@@ -140,9 +139,7 @@ class TaskConfig(BaseModel):
     _mem_regex: ClassVar[re.Pattern] = re.compile(
         r"^(\d+)\s*([KMGT])(?:i|B|iB)?$", re.IGNORECASE
     )
-    _time_regex: ClassVar[re.Pattern] = re.compile(
-        r"(\d+)\s*([dhms])", re.IGNORECASE
-    )
+    _time_regex: ClassVar[re.Pattern] = re.compile(r"(\d+)\s*([dhms])", re.IGNORECASE)
 
     tags: list[str] = []
 
@@ -164,6 +161,7 @@ class TaskConfig(BaseModel):
     image: Optional[str] = None
 
     concurrency: ConcurrencyConfig = ConcurrencyConfig()
+    flags: Optional[list[str]] = None
     # queue: QueueConfig = QueueConfig()
 
     # Pre/post script hooks
@@ -273,6 +271,8 @@ class TaskConfig(BaseModel):
     @property
     def max_duration_minutes(self) -> int | None:
         """The max_duration converted to total minutes."""
+        if self.max_duration is None:
+            return None
         return self._parse_time_to_minutes(self.max_duration)
 
     @classmethod
@@ -409,18 +409,21 @@ def find_config_path() -> Path | None:
 
 
 def load_config(
-    config_path: Optional[str] = None,
+    config_path: str | None = None,
 ) -> dict[str, Any]:
     """
     Load configuration from YAML file.
     If no path is provided, it uses discovery logic.
     """
-    if config_path in CACHE:
-        return CACHE[config_path]
     if config_path is None:
         path = find_config_path()
         if not path:
             return {}
+        else:
+            config_path = str(path)
+
+    if config_path in CACHE:
+        return CACHE[config_path]
     else:
         path = Path(config_path)
         if not path.exists():
@@ -435,7 +438,6 @@ def load_config(
             if not isinstance(val, dict):
                 raise ValueError(f"{key} configuration should hold a dict")
         elif key.startswith("task."):
-            family = key[5:]
             if not isinstance(val, dict):
                 raise ValueError(f"{key} configuration should hold a dict")
         else:

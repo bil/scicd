@@ -2,6 +2,7 @@
 Utilities for path management and remote sync.
 """
 
+from __future__ import annotations
 import shlex
 import os
 from typing import Optional
@@ -10,7 +11,7 @@ from pathlib import Path
 from scicd.config import WorkspaceConfig, get_workspace_config
 
 
-def get_relpath(path: str | Path, config_path: str):
+def get_relpath(path: str | Path, config_path: Optional[str]):
     path = Path(path)
     wspace = get_workspace_config(config_path)
     if wspace.data_root:
@@ -29,9 +30,7 @@ def rclone_commands(
 ) -> list[str]:
     if not files:
         return []
-    includes = " ".join(
-        [f"--filter {shlex.quote(f'+ {f}')}" for f in sorted(files)]
-    )
+    includes = " ".join([f"--filter {shlex.quote(f'+ {f}')}" for f in sorted(files)])
     cmd = "rclone copy"
     if direction == "pull":
         cmd += f' "{remote_root}" "{data_root}"'

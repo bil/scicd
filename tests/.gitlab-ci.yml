@@ -1,12 +1,12 @@
 stages:
-- stage_0
-- stage_1
+  - stage_0
+  - stage_1
 T1_id:
   image: python:3.10
   timeout: 60m
   stage: stage_0
   script:
-  - echo test
+    - echo test
   variables:
     SCICD_PARAMS: '[{}]'
     SCICD_INPUTS: '[]'
@@ -17,11 +17,11 @@ T2_id:
   timeout: 60m
   stage: stage_1
   script:
-  - echo test
+    - echo test
   variables:
     SCICD_PARAMS: '[{}]'
     SCICD_INPUTS: '[]'
     SCICD_OUTPUTS: '[]'
     SCICD_CFG: '{"cpu":2}'
   needs:
-  - T1_id
+    - T1_id

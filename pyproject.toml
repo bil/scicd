@@ -43,17 +43,10 @@ luigi = [
     "luigi"
 ]
 dev = [
-    "quarto-cli",
     "pytest",
     "pytest-mock",
-    "nbstripout",
-    "jupyter",
-    "notebook",
     "pre-commit",
-    "matplotlib",
     "luigi",
-    "black",
-    "pylint"
 ]
 
 [tool.uv.build-backend]
@@ -64,3 +57,9 @@ module-root = ""
 [tool.black]
 target-version = ['py312']
 line-length = 80
+
+[tool.ruff]
+extend-exclude = ["tests"]
+
+[tool.ty.src]
+exclude = ["tests"]

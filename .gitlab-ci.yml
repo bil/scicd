@@ -1,70 +1,14 @@
-default:
-  before_script:
-    - python3 -m pip install -e .[dev]
-  tags:
-    - bilkube
-workflow:
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "push"
 stages:
   - stage_0
   - stage_1
-RunTests:python_version=3.9:
-  image: python:3.9
-  tags:
-    - bilkube
+GenerateWords:words=["apple","banana","grapefruit"]:
   stage: stage_0
   needs: []
   script:
-    - PYTHONPATH=. luigi --module utils.pipeline RunTests --RunTests-python-version=3.9 --local-scheduler
-RunTests:python_version=3.10:
-  image: python:3.10
-  tags:
-    - bilkube
-  stage: stage_0
-  needs: []
-  script:
-    - PYTHONPATH=. luigi --module utils.pipeline RunTests --RunTests-python-version=3.10 --local-scheduler
-RunTests:python_version=3.11:
-  image: python:3.11
-  tags:
-    - bilkube
-  stage: stage_0
-  needs: []
-  script:
-    - PYTHONPATH=. luigi --module utils.pipeline RunTests --RunTests-python-version=3.11 --local-scheduler
-RunTests:python_version=3.12:
-  image: python:3.12
-  tags:
-    - bilkube
-  stage: stage_0
-  needs: []
-  script:
-    - PYTHONPATH=. luigi --module utils.pipeline RunTests --RunTests-python-version=3.12 --local-scheduler
-RunTests:python_version=3.13:
-  image: python:3.13
-  tags:
-    - bilkube
-  stage: stage_0
-  needs: []
-  script:
-    - PYTHONPATH=. luigi --module utils.pipeline RunTests --RunTests-python-version=3.13 --local-scheduler
-RunTests:python_version=3.14:
-  image: python:3.14
-  tags:
-    - bilkube
-  stage: stage_0
-  needs: []
-  script:
-    - PYTHONPATH=. luigi --module utils.pipeline RunTests --RunTests-python-version=3.14 --local-scheduler
-Pipeline:
+    - PYTHONPATH=. luigi --module tests.luigi.simple GenerateWords --GenerateWords-words='["apple", "banana", "grapefruit"]' --local-scheduler
+CountLetters:
   stage: stage_1
   needs:
-    - RunTests:python_version=3.10
-    - RunTests:python_version=3.11
-    - RunTests:python_version=3.12
-    - RunTests:python_version=3.13
-    - RunTests:python_version=3.14
-    - RunTests:python_version=3.9
+    - GenerateWords:words=["apple","banana","grapefruit"]
   script:
-    - PYTHONPATH=. luigi --module utils.pipeline Pipeline --local-scheduler
+    - PYTHONPATH=. luigi --module tests.luigi.simple CountLetters --local-scheduler

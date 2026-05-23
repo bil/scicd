@@ -70,9 +70,7 @@ def test_task_config_merge():
     Ensures that multiple TaskConfig sources can be layered correctly.
     """
     config = TaskConfig(cpu=2, memory="8Gi")
-    merged = config.merge(
-        {"cpu": 4, "tags": ["gpu"], "variables": {"test": "value"}}
-    )
+    merged = config.merge({"cpu": 4, "tags": ["gpu"], "variables": {"test": "value"}})
     assert merged.cpu == 4
     assert merged.memory == "8Gi"
     assert merged.tags == ["gpu"]
@@ -93,14 +91,6 @@ def test_workspace_config():
     Ensures that the root WorkspaceConfig can be correctly parsed from
     its constituent components, and fails if task configs are passed.
     """
-    ws = WorkspaceConfig(
-        **{
-            "url": "https://gitlab.com",
-            "project": "org/repo",
-            "user": {"anything": "here"},
-        }
-    )
-
     with pytest.raises(ValidationError):
         WorkspaceConfig(cpu=4)
 

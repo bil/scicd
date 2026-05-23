@@ -1,6 +1,7 @@
 .PHONY: pipeline run clean
 
 pipeline: .gitlab-ci.yml
+
 run:
 	@scicd gitlab run
 

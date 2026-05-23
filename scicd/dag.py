@@ -5,7 +5,7 @@ This module defines the internal representation of a pipeline as a graph of node
 where each node encapsulates one or more units of work (adapters).
 """
 
-from typing import Literal, Optional
+from typing import Optional
 
 import scicd.backend.gitlab
 import scicd.backend.dot
@@ -25,8 +25,8 @@ class DAG:
 
     def export(
         self,
-        backend: Literal["gitlab", "dot"] = "gitlab",
-        file_path: str = None,
+        backend: str = "gitlab",
+        file_path: Optional[str] = None,
     ):
         if backend == "gitlab":
             if file_path is None:
@@ -37,14 +37,13 @@ class DAG:
                 file_path = "dag.dot"
             scicd.backend.dot.export_dag(self, file_path)
         else:
-            raise NotImplementedError(
-                f"DAG export not implemented for {backend}"
-            )
+            raise NotImplementedError(f"DAG export not implemented for {backend}")
 
 
 def _get_rank_dicts(
     target_adapter: BaseAdapter,
 ) -> tuple[dict[str, BaseAdapter], dict[int, list[str]]]:
+    """Topological sorting"""
 
     id_to_adapter: dict[str, BaseAdapter] = {}
     id_to_rank: dict[str, int] = {}
@@ -113,17 +112,14 @@ def _group_into_nodes(
 
                 # Use node identifier as key to ensure it only appears once as value
                 deps = {
-                    id_to_node[dep.identifier]
-                    for adpt in adapters
-                    for dep in adpt.deps
+                    id_to_node[dep.identifier] for adpt in adapters for dep in adpt.deps
                 }
                 node = Node(adapters=adapters, rank=rank, deps=list(deps))
                 nodes.append(node)
                 for adpt in adapters:
                     id_to_node[adpt.identifier] = node
-
-            else:
-                raise NotImplementedError
+    #             else:
+    #                 raise NotImplementedError
     # Ensure we have processed all adapters
     assert set(id_to_node) == set(id_to_adapter)
 

@@ -31,16 +31,12 @@ def export_dag(dag: "DAG", file_path: str = "dag.dot"):
 
     for _, nodes in sorted(ranks.items()):
         current_rank_nodes = sorted(nodes, key=lambda x: x.dot_label)
-        identifiers = " ".join(
-            [f'"{node_to_id[id(n)]}"' for n in current_rank_nodes]
-        )
+        identifiers = " ".join([f'"{node_to_id[id(n)]}"' for n in current_rank_nodes])
         dot_lines.append(f"    {{rank=same; {identifiers} }}")
 
         for node in current_rank_nodes:
             color = (
-                "lightblue"
-                if node.cfg.concurrency.method == "slice"
-                else "lightgrey"
+                "lightblue" if node.cfg.concurrency.method == "slice" else "lightgrey"
             )
             label = node.dot_label.replace('"', '\\"')
             stable_id = node_to_id[id(node)]

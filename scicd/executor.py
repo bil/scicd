@@ -75,7 +75,7 @@ class _ExecutorRegistry:
         if spec and spec.loader:
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
-            print(f"Loaded custom executors from {str(path)}")
+            # print(f"Loaded custom executors from {str(path)}")
 
     @classmethod
     def reset(cls):
