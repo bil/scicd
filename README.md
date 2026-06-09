@@ -46,12 +46,12 @@ pip install scicd
 
 Let's see a simple example.
 
-To get started, you'll have to register your laptop as a Docker executor in your Gitlab instance. For instructions on how to do this, check out the [Gitlab documentation](https://docs.gitlab.com/ci/runners/runners_scope/#group-runners).
+To get started, you'll have to register your computer as a Docker executor in your Gitlab instance. For instructions on how to do this, check out the [Gitlab documentation](https://docs.gitlab.com/ci/runners/runners_scope/#group-runners).
 
 Now consider the following Luigi workflow in a file called `workflow.py`.
 We've added some in-place configuration, but importantly **this is still just Luigi** and you can run it in all the ways Luigi is capable of.
 
-However, taking advantage of CI/CD, we've indicated we want to run both tasks on a runner with the tag `my-laptop` in the `python:3.12` container image.
+However, taking advantage of CI/CD, we've indicated we want to run both tasks on a runner with the tag `pc` in the `python:3.12` container image.
 
 ```python
 import os
@@ -63,7 +63,7 @@ PATH_OUTPUT = os.environ["PATH_OUTPUT"]
 
 class GenerateWords(luigi.Task):
     # We added this
-    scicd = {"image": "python:3.12", "tags": ["my-laptop"]}
+    scicd = {"image": "python:3.12", "tags": ["pc"]}
 
     words = luigi.ListParameter(default=("apple", "banana", "grapefruit"))
 
@@ -80,7 +80,7 @@ class GenerateWords(luigi.Task):
 
 class CountLetters(luigi.Task):
     # We added this
-    scicd = {"image": "python:3.12", "tags": ["my-laptop"]}
+    scicd = {"image": "python:3.12", "tags": ["pc"]}
 
     def requires(self):
         return GenerateWords()
@@ -116,8 +116,8 @@ from scicd.config import TaskConfig
 from scicd.executor import register_executor
 
 
-@register_executor(tags=["my-laptop"])
-def my_laptop(cfg: TaskConfig) -> Dict[str, str]:
+@register_executor(tags=["pc"])
+def pc(cfg: TaskConfig) -> Dict[str, str]:
     return {"PATH_OUTPUT": "/path/to/local/output"}
 ```
 
@@ -170,3 +170,5 @@ CountLetters:
   script:
   - PYTHONPATH=. luigi --module luigi_examples.simple.simple CountLetters --local-scheduler
 ```
+
+For more guidance, please look at the examples!
