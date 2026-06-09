@@ -104,30 +104,6 @@ class ConcurrencyConfig(BaseModel):
         return self
 
 
-# class QueueConfig(BaseModel):
-#     """
-#     Configuration for queue-based dynamic concurrency.
-#     Used when method='queue' to interface with message brokers like GCP Pub/Sub.
-#     """
-
-#     model_config = ConfigDict(extra="allow", validate_assignment=True)
-
-#     platform: Optional[Literal["gcp"]] = None
-#     topic: str = ""
-#     subscription: str = ""
-#     config: dict[str, Any] = {}
-
-#     @model_validator(mode="after")
-#     def check_queue(self) -> "QueueConfig":
-#         """Ensure required fields are set for the selected platform."""
-#         if self.platform == "gcp":
-#             if not self.topic:
-#                 raise ValueError("queue.topic cannot be empty")
-#             if not self.subscription:
-#                 raise ValueError("queue.subscription cannot be empty")
-#         return self
-
-
 class TaskConfig(BaseModel):
     """
     Unified configuration for a single node within SciCD.
@@ -162,11 +138,6 @@ class TaskConfig(BaseModel):
 
     concurrency: ConcurrencyConfig = ConcurrencyConfig()
     flags: Optional[list[str]] = None
-    # queue: QueueConfig = QueueConfig()
-
-    # Pre/post script hooks
-    # pre: list[str] = []
-    # post: list[str] = []
 
     # Environment variables
     variables: dict[str, Union[str, int, float]] = {}
@@ -238,23 +209,7 @@ class TaskConfig(BaseModel):
                 f"Invalid max_duration format '{v_str}'. Expected e.g. '1h 30m', '10s'"
             )
 
-        # Canonical format: normalized space-separated lowercase segments
         return " ".join([f"{val}{unit.lower()}" for val, unit in matches])
-
-    # @model_validator(mode="after")
-    # def check_queue(self) -> "TaskConfig":
-    #     """Verify queue settings if concurrency method is 'queue'."""
-    #     if self.concurrency.method == "queue":
-    #         if (
-    #             self.queue.platform is None
-    #             or not self.queue.subscription
-    #             or not self.queue.topic
-    #         ):
-    #             raise ValueError(
-    #                 "To use queue concurrency method, must provide "
-    #                 "queue.{platform,subscription,topic}"
-    #             )
-    #     return self
 
     @property
     def memory_mb(self) -> int | None:
@@ -385,7 +340,6 @@ def find_config_path() -> Path | None:
     if env_path:
         p = Path(env_path)
         if p.exists():
-            print(f"Loading config from SCICD_CONFIG_PATH: {env_path}")
             return p
         raise FileNotFoundError(
             f"Config file specified in SCICD_CONFIG_PATH not found: {env_path}"
@@ -402,7 +356,6 @@ def find_config_path() -> Path | None:
     for c in candidates:
         p = Path(c)
         if p.exists():
-            print(f"Loading discovered config: {c}")
             return p
 
     return None

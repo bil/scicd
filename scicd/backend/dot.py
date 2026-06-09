@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from scicd.dag import DAG
 
 
-def export_dag(dag: "DAG", file_path: str = "dag.dot"):
+def export_dag(dag: "DAG", output: str = "dag.dot"):
     """
     Export DAG to Graphviz DOT format for visualization.
     """
@@ -53,6 +53,6 @@ def export_dag(dag: "DAG", file_path: str = "dag.dot"):
     dot_lines.append("}")
     out = "\n".join(dot_lines)
 
-    with open(file_path, "w", encoding="utf-8") as f:
+    with open(output, "w", encoding="utf-8") as f:
         f.write(out)
     return out

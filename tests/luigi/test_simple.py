@@ -11,9 +11,9 @@ def test_simple_dag(tmp_path):
             "build",
             "tests.luigi.simple",
             "CountLetters",
-            "--config-path",
+            "--config",
             "/dev/null",
-            "--file-path",
+            "--output",
             str(out_path),
         ]
     )

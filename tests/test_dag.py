@@ -161,7 +161,7 @@ def test_dag_export_dot(tmp_path):
     dag = DAG([node1])
 
     dot_file = tmp_path / "dag.dot"
-    dag.export(backend="dot", file_path=dot_file)
+    dag.export(backend="dot", output=dot_file)
 
     content = dot_file.read_text()
     assert "digraph G {" in content

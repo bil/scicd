@@ -29,7 +29,7 @@ def get_pat() -> str:
 
 def export_dag(
     dag: DAG,
-    file_path: str = ".gitlab-ci.yml",
+    output: str = ".gitlab-ci.yml",
 ) -> dict:
     """Render abstract DAG into a GitLab CI/CD pipeline file."""
     wspace = get_workspace_config(dag.config_path)
@@ -49,7 +49,7 @@ def export_dag(
     pipeline["stages"] = unique_stages
     pipeline.update(all_jobs)
 
-    with open(file_path, "w", encoding="utf-8") as f:
+    with open(output, "w", encoding="utf-8") as f:
         yaml.dump(
             pipeline,
             f,

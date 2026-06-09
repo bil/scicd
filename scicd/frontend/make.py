@@ -354,9 +354,11 @@ def extract_rules_from_db(
                 target_group = list(sorted(target_group))
                 matched_rule = None
                 for val in target_group:
-                    matched_rule = find_rule(rules, val)
-                    if matched_rule is not None:
+                    try:
+                        matched_rule = find_rule(rules, val)
                         break
+                    except ValueError:
+                        matched_rule = None
                 if matched_rule is not None:
                     if not matched_rule.implicit:
                         for val in target_group:
@@ -443,14 +445,16 @@ def extract_rule_config(
         rule_lines = lines[rule.line :]
         for line in rule_lines:
             if "# scicd:" in line:
-                _, config_str = line.split("# scicd", maxsplit=1)
+                _, config_str = line.split("# scicd:", maxsplit=1)
                 config_str = config_str.strip()
-                parts = config_str.split()
-                for part in parts:
-                    if "=" not in part:
-                        continue
-                    key, val = part.split(sep="=")
-                    config[key] = val
+                key, val = config_str.split(sep="=")
+                config[key] = val
+                # parts = config_str.split()
+                # for part in parts:
+                #     if "=" not in part:
+                #         continue
+                #     key, val = part.split(sep="=")
+                #     config[key] = val
             else:
                 break
     nested_overrides = nest_dict(config)
@@ -537,29 +541,6 @@ def parse_make_trace(
                     makefile_path=makefile_path,
                     rule=rule,
                 )
-                # if rule.phony:
-                #     targets = rule.
-                # work = MakeWork(makefile_path=makefile_path, rule=rule)
-                # works.append(work)
-                # if rule.phony:
-                #     work.add_target(target_name)
-                # else:
-                #     if rule.implicit:
-                #         stem = rule.match_stem(target_name)
-                #         assert stem is not None
-                #         work.stem = stem
-                #         filled_patterns = fill_patterns(rule.target_patterns, stem)
-                #         filled_prereqs = fill_patterns(rule.prereq_patterns, stem)
-                #         for target in filled_patterns:
-                #             work.add_target(target)
-                #         for prereq in filled_prereqs:
-                #             work.add_prereq(prereq)
-                #     elif rule.grouped:
-                #         assert target_name in rule.target_patterns
-                #         for pat in rule.target_patterns:
-                #             work.add_target(pat)
-                #     else:
-                #         work.add_target(target_name)
                 current_adapter = MakeAdapter(work, work.rule.config_path)
                 adapters.append(current_adapter)
             else:
@@ -626,46 +607,20 @@ def rules(
     return rules
 
 
-# def _run(makefile_path: str = "Makefile", targets: Optional[list[str]] = None) -> None:
-#     cmd = [
-#         "make",
-#         "-f",
-#         makefile_path,
-#     ]
-#     if targets:
-#         cmd.extend(targets)
-#     subprocess.run(cmd, check=True)
-
-
-# @app.command()
-# def run(
-#     makefile_path: str = "Makefile", targets: Optional[list[str]] = None
-# ) -> None:  # pylint: disable=unused-argument
-#     _run(makefile_path, targets)
-
-# @app.command()
-# def run_slice(patterns: list[str], makefile_path: str = "Makefile"):
-#     my_params = get_my_params()
-#     targets = []
-#     for prms in my_params:
-#         targets.extend(fill_patterns(patterns, prms["stem"]))
-#     _run(makefile_path, targets)
-
-
 @app.command
 def build(
     makefile_path: Annotated[str, Parameter(alias="-f")] = "Makefile",
     targets: Annotated[Optional[list[str]], Parameter(alias="t")] = None,
-    config_path: Annotated[Optional[str], Parameter(alias="-c")] = None,
+    config: Annotated[Optional[str], Parameter(alias="-c")] = None,
     backend: Annotated[str, Parameter(alias="-b")] = "gitlab",
-    file_path: Annotated[Optional[str], Parameter(alias="-o")] = None,
+    output: Annotated[Optional[str], Parameter(alias="-o")] = None,
 ) -> None:
     make_trace = get_make_trace(makefile_path, targets)
     db_trace = get_db_trace(makefile_path, targets)
-    rules = extract_rules_from_db(db_trace, makefile_path, config_path)
+    rules = extract_rules_from_db(db_trace, makefile_path, config)
     adapter = parse_make_trace(make_trace, rules, makefile_path)
     dag = scicd.dag.build(adapter)
-    dag.export(backend, file_path)
+    dag.export(backend, output)
     return
 
 

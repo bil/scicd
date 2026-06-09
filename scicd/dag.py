@@ -26,16 +26,16 @@ class DAG:
     def export(
         self,
         backend: str = "gitlab",
-        file_path: Optional[str] = None,
+        output: Optional[str] = None,
     ):
         if backend == "gitlab":
-            if file_path is None:
-                file_path = ".gitlab-ci.yml"
-            scicd.backend.gitlab.export_dag(self, file_path)
+            if output is None:
+                output = ".gitlab-ci.yml"
+            scicd.backend.gitlab.export_dag(self, output)
         elif backend == "dot":
-            if file_path is None:
-                file_path = "dag.dot"
-            scicd.backend.dot.export_dag(self, file_path)
+            if output is None:
+                output = "dag.dot"
+            scicd.backend.dot.export_dag(self, output)
         else:
             raise NotImplementedError(f"DAG export not implemented for {backend}")
 

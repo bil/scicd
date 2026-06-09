@@ -252,18 +252,18 @@ def load_luigi_task(module: str, task: str, **kwargs) -> luigi.Task:
 def build(
     module: Annotated[str, Parameter(alias="-m")],
     task: Annotated[str, Parameter(alias="-t")],
-    config_path: Annotated[Optional[str], Parameter(alias="-c")] = None,
+    config: Annotated[Optional[str], Parameter(alias="-c")] = None,
     backend: Annotated[str, Parameter(alias="-b")] = "gitlab",
-    file_path: Annotated[Optional[str], Parameter(alias="-o")] = None,
+    output: Annotated[Optional[str], Parameter(alias="-o")] = None,
     **kwargs,
 ) -> None:
     """
     Build DAG from luigi workflow.
     """
     target_task = load_luigi_task(module, task, **kwargs)
-    target_adapter = LuigiAdapter(target_task, config_path)
+    target_adapter = LuigiAdapter(target_task, config)
     dag = scicd.dag.build(target_adapter)
-    dag.export(backend, file_path)
+    dag.export(backend, output)
     return
 
 
