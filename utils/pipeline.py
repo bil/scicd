@@ -39,4 +39,4 @@ class Pipeline(luigi.WrapperTask):
     def requires(self):
         """Require RunTests for Python 3.9 through 3.14."""
         for version in ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]:
-            yield RunTests(version)
+            yield RunTests(python_version=version)

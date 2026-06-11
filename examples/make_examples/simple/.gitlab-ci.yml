@@ -1,0 +1,87 @@
+default:
+  before_script:
+    - curl https://rclone.org/install.sh | bash
+stages:
+  - stage_0
+  - stage_1
+  - stage_2
+simple_make/pre_foo.txt:
+  image: python:3.12
+  tags:
+    - pc
+  stage: stage_0
+  variables:
+    PATH_OUTPUT: /scratch/tmp/pc
+  needs: []
+  script:
+    - mkdir -p "$PATH_OUTPUT"
+    - make -f $PWD/Makefile -C "$PATH_OUTPUT" simple_make/pre_foo.txt
+    - rclone copy "$PATH_OUTPUT" "sgd:tmp/scicd_example/make" --no-traverse --filter '+ **/' --filter '+ simple_make/pre_foo.txt' --filter '- *'
+simple_make/pre_bar.txt:
+  image: python:3.12
+  tags:
+    - pc
+  stage: stage_0
+  variables:
+    PATH_OUTPUT: /scratch/tmp/pc
+  needs: []
+  script:
+    - mkdir -p "$PATH_OUTPUT"
+    - make -f $PWD/Makefile -C "$PATH_OUTPUT" simple_make/pre_bar.txt
+    - rclone copy "$PATH_OUTPUT" "sgd:tmp/scicd_example/make" --no-traverse --filter '+ **/' --filter '+ simple_make/pre_bar.txt' --filter '- *'
+simple_make/omg.txt&simple_make/wow.txt:
+  image: python:3.12
+  variables:
+    test: hi there!
+    PATH_OUTPUT: /scratch/tmp/pc2
+  tags:
+    - pc2
+  stage: stage_0
+  needs: []
+  script:
+    - mkdir -p "$PATH_OUTPUT"
+    - make -f $PWD/Makefile -C "$PATH_OUTPUT" simple_make/omg.txt simple_make/wow.txt
+    - rclone copy "$PATH_OUTPUT" "sgd:tmp/scicd_example/make" --no-traverse --filter '+ **/' --filter '+ simple_make/omg.txt' --filter '+ simple_make/wow.txt' --filter '- *'
+simple_make/foo.txt:
+  image: python:3.10
+  tags:
+    - pc
+  stage: stage_1
+  variables:
+    PATH_OUTPUT: /scratch/tmp/pc
+  needs:
+    - simple_make/pre_foo.txt
+  script:
+    - rclone copy "sgd:tmp/scicd_example/make" "$PATH_OUTPUT" --no-traverse --filter '+ **/' --filter '+ simple_make/pre_foo.txt' --filter '- *'
+    - mkdir -p "$PATH_OUTPUT"
+    - make -f $PWD/Makefile -C "$PATH_OUTPUT" simple_make/foo.txt
+    - rclone copy "$PATH_OUTPUT" "sgd:tmp/scicd_example/make" --no-traverse --filter '+ **/' --filter '+ simple_make/foo.txt' --filter '- *'
+simple_make/bar.txt:
+  image: python:3.10
+  tags:
+    - pc
+  stage: stage_1
+  variables:
+    PATH_OUTPUT: /scratch/tmp/pc
+  needs:
+    - simple_make/pre_bar.txt
+  script:
+    - rclone copy "sgd:tmp/scicd_example/make" "$PATH_OUTPUT" --no-traverse --filter '+ **/' --filter '+ simple_make/pre_bar.txt' --filter '- *'
+    - mkdir -p "$PATH_OUTPUT"
+    - make -f $PWD/Makefile -C "$PATH_OUTPUT" simple_make/bar.txt
+    - rclone copy "$PATH_OUTPUT" "sgd:tmp/scicd_example/make" --no-traverse --filter '+ **/' --filter '+ simple_make/bar.txt' --filter '- *'
+all:
+  image: python:3.12
+  tags:
+    - pc
+  stage: stage_2
+  variables:
+    PATH_OUTPUT: /scratch/tmp/pc
+  needs:
+    - simple_make/bar.txt
+    - simple_make/foo.txt
+    - simple_make/omg.txt&simple_make/wow.txt
+  script:
+    - rclone copy "sgd:tmp/scicd_example/make" "$PATH_OUTPUT" --no-traverse --filter '+ **/' --filter '+ simple_make/bar.txt' --filter '+ simple_make/foo.txt' --filter '+ simple_make/wow.txt' --filter '- *'
+    - mkdir -p "$PATH_OUTPUT"
+    - make -f $PWD/Makefile -C "$PATH_OUTPUT" all

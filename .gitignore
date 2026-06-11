@@ -171,5 +171,4 @@ cython_debug/
 data
 tmp
 tags
-examples
 TODO.md

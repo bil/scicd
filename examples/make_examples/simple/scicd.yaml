@@ -1,0 +1,11 @@
+workspace:
+  # These tell rclone to sync data_root with remote_root
+  data_root: $$PATH_OUTPUT
+  remote_root: rclone://sgd:tmp/scicd_example/make
+  cicd:
+    default:
+      before_script:
+        - curl https://rclone.org/install.sh | bash # install rclone
+task:
+  image: python:3.12
+  tags: ['pc']

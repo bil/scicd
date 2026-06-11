@@ -1,0 +1,37 @@
+workspace:
+  # These tell rclone to sync data_root with remote_root
+  data_root: $$PATH_OUTPUT
+  remote_root: rclone://sgd:tmp/scicd_example/luigi
+  # Additional configuration for the rclone call
+  remote_flags: "--progress --transfers 8"
+  cicd:
+    default:
+      before_script:
+        - curl https://rclone.org/install.sh | bash # install rclone
+        - pip install luigi
+# This can set a default configuration for each task
+task:
+  # Container image
+  image: python:3.12
+  # Tags
+  tags: ['pc']
+  # Retry count
+  retry: 2
+  # Arbitrary environment variables
+  variables:
+    are: cool
+  # Anything you'd like to add (for instance, to use during executor registration)
+  user:
+    anything:
+      can:
+        go: here
+task.CountLetters:
+  # bilkube is the tag for our Kubernetes cluster
+  tags: ['bilkube']
+  variables:
+    are: not cool
+  # Let's add resource requests
+  cpu: 1
+  memory: '2Gi'
+  disk: '5Gi'
+  compute_type: Balanced

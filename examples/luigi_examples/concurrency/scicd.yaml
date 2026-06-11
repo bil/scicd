@@ -1,0 +1,9 @@
+workspace:
+  data_root: $$PATH_OUTPUT
+  cicd:
+    default:
+      before_script:
+        - pip install luigi numpy
+task:
+  image: python:3.12
+  tags: ['pc']

@@ -1,0 +1,5 @@
+workspace:
+  cicd:
+    default:
+      before_script:
+        - pip install luigi

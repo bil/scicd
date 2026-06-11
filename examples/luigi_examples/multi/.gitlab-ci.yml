@@ -1,0 +1,35 @@
+default:
+  before_script:
+    - curl https://rclone.org/install.sh | bash
+    - pip install luigi
+stages:
+  - stage_0
+  - stage_1
+GenerateWords:words=["apple","banana","grapefruit"]:
+  image: python:3.12
+  variables:
+    are: cool
+    PATH_OUTPUT: /scratch/tmp/pc
+  tags:
+    - pc
+  retry: 1
+  stage: stage_0
+  needs: []
+  script:
+    - PYTHONPATH=. luigi --module workflow GenerateWords --GenerateWords-words='["apple", "banana", "grapefruit"]' --local-scheduler
+    - rclone copy "$PATH_OUTPUT" "sgd:tmp/scicd_example/luigi" --no-traverse --filter '+ **/' --filter '+ multi/words.txt' --filter '- *' --progress --transfers 8
+CountLetters:
+  image: python:3.12
+  variables:
+    are: not cool
+    PATH_OUTPUT: /scratch/tmp/pc2
+  tags:
+    - pc2
+  retry: 1
+  stage: stage_1
+  needs:
+    - GenerateWords:words=["apple","banana","grapefruit"]
+  script:
+    - rclone copy "sgd:tmp/scicd_example/luigi" "$PATH_OUTPUT" --no-traverse --filter '+ **/' --filter '+ multi/words.txt' --filter '- *' --progress --transfers 8
+    - PYTHONPATH=. luigi --module workflow CountLetters --local-scheduler
+    - rclone copy "$PATH_OUTPUT" "sgd:tmp/scicd_example/luigi" --no-traverse --filter '+ **/' --filter '+ multi/letter_counts.txt' --filter '- *' --progress --transfers 8

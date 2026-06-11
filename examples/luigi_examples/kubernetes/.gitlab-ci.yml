@@ -1,0 +1,39 @@
+default:
+  before_script:
+    - curl https://rclone.org/install.sh | bash
+    - pip install luigi
+stages:
+  - stage_0
+  - stage_1
+GenerateWords:words=["apple","banana","grapefruit"]:
+  image: python:3.12
+  variables:
+    are: cool
+    PATH_OUTPUT: /scratch/tmp/pc
+  tags:
+    - pc
+  retry: 2
+  stage: stage_0
+  needs: []
+  script:
+    - PYTHONPATH=. luigi --module workflow GenerateWords --GenerateWords-words='["apple", "banana", "grapefruit"]' --local-scheduler
+    - rclone copy "$PATH_OUTPUT" "sgd:tmp/scicd_example/luigi" --no-traverse --filter '+ **/' --filter '+ kubernetes/words.txt' --filter '- *' --progress --transfers 8
+CountLetters:
+  image: python:3.12
+  variables:
+    are: not cool
+    KUBERNETES_CPU_REQUEST: 1
+    KUBERNETES_MEMORY_REQUEST: 2Gi
+    KUBERNETES_EPHEMERAL_STORAGE_REQUEST: 5Gi
+    KUBERNETES_NODE_SELECTOR_COMPUTE: cloud.google.com/compute-class=Balanced
+    PATH_OUTPUT: /scratch/tmp/kubernetes
+  tags:
+    - bilkube
+  retry: 2
+  stage: stage_1
+  needs:
+    - GenerateWords:words=["apple","banana","grapefruit"]
+  script:
+    - rclone copy "sgd:tmp/scicd_example/luigi" "$PATH_OUTPUT" --no-traverse --filter '+ **/' --filter '+ kubernetes/words.txt' --filter '- *' --progress --transfers 8
+    - PYTHONPATH=. luigi --module workflow CountLetters --local-scheduler
+    - rclone copy "$PATH_OUTPUT" "sgd:tmp/scicd_example/luigi" --no-traverse --filter '+ **/' --filter '+ kubernetes/letter_counts.txt' --filter '- *' --progress --transfers 8

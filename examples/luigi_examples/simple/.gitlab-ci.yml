@@ -1,0 +1,27 @@
+default:
+  before_script:
+    - pip install luigi
+stages:
+  - stage_0
+  - stage_1
+GenerateWords:words=["apple","banana","grapefruit"]:
+  image: python:3.12
+  tags:
+    - pc
+  stage: stage_0
+  variables:
+    PATH_OUTPUT: /scratch/tmp/pc
+  needs: []
+  script:
+    - PYTHONPATH=. luigi --module workflow GenerateWords --GenerateWords-words='["apple", "banana", "grapefruit"]' --local-scheduler
+CountLetters:
+  image: python:3.12
+  tags:
+    - pc
+  stage: stage_1
+  variables:
+    PATH_OUTPUT: /scratch/tmp/pc
+  needs:
+    - GenerateWords:words=["apple","banana","grapefruit"]
+  script:
+    - PYTHONPATH=. luigi --module workflow CountLetters --local-scheduler

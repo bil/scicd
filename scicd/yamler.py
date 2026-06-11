@@ -11,7 +11,7 @@ import yaml
 T = TypeVar("T")
 
 
-def expand_vars(data: dict | list | str) -> dict | list | str:
+def expand_vars(data: Any) -> Any:
     """Expand environment variables in strings and nested structures with $$ escaping."""
     if isinstance(data, dict):
         return {k: expand_vars(v) for k, v in data.items()}
@@ -23,6 +23,7 @@ def expand_vars(data: dict | list | str) -> dict | list | str:
         text = data.replace("$$", placeholder)
         text = os.path.expandvars(text)
         return text.replace(placeholder, "$")
+    return data
 
 
 def load_yaml(path: str, expand=True) -> dict[str, Any]:

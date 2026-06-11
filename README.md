@@ -44,7 +44,7 @@ pip install scicd
 
 ## How does it work?
 
-Let's see a simple example.
+Let's see a simple example. This is `examples/luigi_examples/simple`.
 
 To get started, you'll have to register your computer as a Docker executor in your Gitlab instance. For instructions on how to do this, check out the [Gitlab documentation](https://docs.gitlab.com/ci/runners/runners_scope/#group-runners).
 
@@ -68,7 +68,7 @@ class GenerateWords(luigi.Task):
     words = luigi.ListParameter(default=("apple", "banana", "grapefruit"))
 
     def output(self):
-        return luigi.LocalTarget(f"{PATH_OUTPUT}/tmp/words.txt")
+        return luigi.LocalTarget(f"{PATH_OUTPUT}/words.txt")
 
     def run(self):
         # write a dummy list of words to output file
@@ -86,7 +86,7 @@ class CountLetters(luigi.Task):
         return GenerateWords()
 
     def output(self):
-        return luigi.LocalTarget(f"{PATH_OUTPUT}/tmp/letter_counts.txt")
+        return luigi.LocalTarget(f"{PATH_OUTPUT}/letter_counts.txt")
 
     def run(self):
 
@@ -108,6 +108,11 @@ class CountLetters(luigi.Task):
 You'll also notice we use an environment variable as the base directory for our outputs.
 This is a desirable pattern so you can set different outputs paths depending on where the code is executing.
 We can set executor-specific environment variables with SciCD by adding a root file called `scicd_executors.py`.
+This file will be automatically detected by `scicd`, and gives you a chance to inject environment variables relevant for a specific execution environment.
+The method receives a `TaskConfig` object which stores information like the `image`, `tags` and resource requests (e.g. `cpu`).
+In Kubernetes or Slurm execution environments, you might want to translate these resources into relevant environment variables.
+See `examples/luigi_examples/kubernetes` for more.
+For now, we keep it simple and just inject our `PATH_OUTPUT` variable.
 
 ```python
 from typing import Dict
@@ -123,6 +128,9 @@ def pc(cfg: TaskConfig) -> Dict[str, str]:
 
 We also want to ensure that `luigi` is installed in the `python:3.12` container.
 We can do that by configuring SciCD with a root `scicd.yaml` file.
+There's a lot you can do with this file.
+Here, we're using the `workspace.cicd` key to just inject arbtrary Gitlab CI/CD boilerplate, but you can also specify task configuration, remote syncing, and more with this file.
+See the examples!
 
 ```yaml
 workspace:
@@ -151,20 +159,20 @@ stages:
 GenerateWords:words=["apple","banana","grapefruit"]:
   image: python:3.12
   tags:
-  - my-laptop
+  - pc
   stage: stage_0
   variables:
-    PATH_OUTPUT: /scratch/tmp/worm
+    PATH_OUTPUT: /path/to/local/output
   needs: []
   script:
   - PYTHONPATH=. luigi --module luigi_examples.simple.simple GenerateWords --GenerateWords-words='["apple", "banana", "grapefruit"]' --local-scheduler
 CountLetters:
   image: python:3.12
   tags:
-  - my-laptop
+  - pc
   stage: stage_1
   variables:
-    PATH_OUTPUT: /scratch/tmp/worm
+    PATH_OUTPUT: /path/to/local/output
   needs:
   - GenerateWords:words=["apple","banana","grapefruit"]
   script:
@@ -172,3 +180,10 @@ CountLetters:
 ```
 
 For more guidance, please look at the examples!
+
+## Limitations
+
+While we plan on supporting Github Actions compilation, this has not yet been implemented.
+
+In addition, the transpiler is static and cannot detect dynamic aspects of workflows (like a Luigi task generating additional tasks at runtime).
+This means dynamic tasks will run in the same job as the discoverable static parent task, and that highly dynamic workflows will be less amenable to the sort of distributed computation unlocked by Ci/CD.
