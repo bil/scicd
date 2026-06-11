@@ -1,11 +1,6 @@
 default:
   before_script:
     - python3 -m pip install -e .[dev]
-  tags:
-    - bilkube
-workflow:
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "push"
 stages:
   - stage_0
   - stage_1
@@ -58,6 +53,9 @@ RunTests:python_version=3.14:
   script:
     - PYTHONPATH=. luigi --module utils.pipeline RunTests --RunTests-python-version=3.14 --local-scheduler
 Pipeline:
+  image: python:3.10
+  tags:
+    - bilkube
   stage: stage_1
   needs:
     - RunTests:python_version=3.10

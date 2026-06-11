@@ -1,6 +1,6 @@
 # SciCD
 
-WARNING: this package is in alpha and is unstable, breaking changes are to be expected
+WARNING: this package is in alpha, breaking changes are to be expected
 
 ## What is it?
 
